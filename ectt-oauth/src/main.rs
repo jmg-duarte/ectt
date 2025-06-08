@@ -1,3 +1,5 @@
+use std::env;
+
 use axum::{
     extract::{Query, State},
     response::Html,
@@ -23,9 +25,8 @@ use tokio::{
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-const GMAIL_CLIENT_ID: &str =
-    "333808756948-n0ndev2ihe3hgqb91ljv0ln3j68c67jt.apps.googleusercontent.com";
-const GMAIL_CLIENT_SECRET: &str = "";
+const GMAIL_CLIENT_ID: &str = env!("GMAIL_CLIENT_ID");
+const GMAIL_CLIENT_SECRET: &str = env!("GMAIL_CLIENT_SECRET");
 
 const GMAIL_AUTH_URL: &str = "https://accounts.google.com/o/oauth2/auth";
 

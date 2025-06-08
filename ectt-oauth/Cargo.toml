@@ -18,3 +18,7 @@ serde = { workspace = true, features = ["derive"] }
 imap = { workspace = true, default-features = false, features = ["rustls-tls"] }
 rustls = { workspace = true }
 base64 = { workspace = true }
+
+[build-dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
