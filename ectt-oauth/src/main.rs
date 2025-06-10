@@ -58,9 +58,9 @@ struct ComposeFields {
 }
 
 struct ReadingFields {
-    to: String,
-    cc: String,
-    bcc: String,
+    from: String,
+    cc: Vec<String>,
+    bcc: Vec<String>,
     body: String,
     scroll: u16,
 }
@@ -92,9 +92,9 @@ impl Default for ScreenState {
                 focused: 0,
             },
             reading: ReadingFields {
-                to: "alice@example.com".to_string(),
-                cc: "bob@example.com".to_string(),
-                bcc: "carol@example.com".to_string(),
+                from: "alice@example.com".to_string(),
+                cc: vec!["bob@example.com".to_string()],
+                bcc: vec!["carol@example.com".to_string()],
                 body: "This is the email body.\nIt can be very long and should wrap and scroll."
                     .to_string(),
                 scroll: 0,
@@ -120,19 +120,16 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             if let Event::Key(key) = event::read()? {
                 match state.screen {
                     Screen::Login => {
-                        // Any key goes to Main for demo
                         state.screen = Screen::Main;
                     }
                     Screen::Main => match (key.code, key.modifiers) {
-                        (crossterm::event::KeyCode::Char('q'), KeyModifiers::CONTROL) => {
+                        (crossterm::event::KeyCode::Char('w'), KeyModifiers::CONTROL) => {
                             break Ok(())
                         }
                         (crossterm::event::KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                            state.screen = Screen::Compose;
+                            state.screen = Screen::Compose
                         }
-                        (crossterm::event::KeyCode::Enter, _) => {
-                            state.screen = Screen::Reading;
-                        }
+                        (crossterm::event::KeyCode::Enter, _) => state.screen = Screen::Reading,
                         (crossterm::event::KeyCode::Down, _) => {
                             let i = match state.table_state.selected() {
                                 Some(i) => {
@@ -161,50 +158,41 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
                         }
                         _ => {}
                     },
-                    Screen::Compose => {
-                        match (key.code, key.modifiers) {
-                            (crossterm::event::KeyCode::Char('s'), KeyModifiers::CONTROL) => {
-                                // Send email (demo: go back to main)
-                                state.screen = Screen::Main;
+                    Screen::Compose => match (key.code, key.modifiers) {
+                        (crossterm::event::KeyCode::Char('s'), KeyModifiers::CONTROL) => {
+                            state.screen = Screen::Main
+                        }
+                        (crossterm::event::KeyCode::Tab, _) => {
+                            state.compose.focused = (state.compose.focused + 1) % 4
+                        }
+                        (crossterm::event::KeyCode::BackTab, _) => {
+                            state.compose.focused = (state.compose.focused + 3) % 4
+                        }
+                        (crossterm::event::KeyCode::Esc, _) => state.screen = Screen::Main,
+                        (crossterm::event::KeyCode::Char(c), _) => match state.compose.focused {
+                            0 => state.compose.to.push(c),
+                            1 => state.compose.cc.push(c),
+                            2 => state.compose.bcc.push(c),
+                            3 => state.compose.body.push(c),
+                            _ => {}
+                        },
+                        (crossterm::event::KeyCode::Backspace, _) => match state.compose.focused {
+                            0 => {
+                                state.compose.to.pop();
                             }
-                            (crossterm::event::KeyCode::Tab, _) => {
-                                state.compose.focused = (state.compose.focused + 1) % 4;
+                            1 => {
+                                state.compose.cc.pop();
                             }
-                            (crossterm::event::KeyCode::BackTab, _) => {
-                                state.compose.focused = (state.compose.focused + 3) % 4;
+                            2 => {
+                                state.compose.bcc.pop();
                             }
-                            (crossterm::event::KeyCode::Esc, _) => {
-                                state.screen = Screen::Main;
-                            }
-                            (crossterm::event::KeyCode::Char(c), _) => {
-                                match state.compose.focused {
-                                    0 => state.compose.to.push(c),
-                                    1 => state.compose.cc.push(c),
-                                    2 => state.compose.bcc.push(c),
-                                    3 => state.compose.body.push(c),
-                                    _ => {}
-                                }
-                            }
-                            (crossterm::event::KeyCode::Backspace, _) => {
-                                match state.compose.focused {
-                                    0 => {
-                                        state.compose.to.pop();
-                                    }
-                                    1 => {
-                                        state.compose.cc.pop();
-                                    }
-                                    2 => {
-                                        state.compose.bcc.pop();
-                                    }
-                                    3 => {
-                                        state.compose.body.pop();
-                                    }
-                                    _ => {}
-                                }
+                            3 => {
+                                state.compose.body.pop();
                             }
                             _ => {}
-                        }
-                    }
+                        },
+                        _ => {}
+                    },
                     Screen::Reading => match key.code {
                         crossterm::event::KeyCode::Esc => state.screen = Screen::Main,
                         crossterm::event::KeyCode::Down => state.reading.scroll += 1,
@@ -233,7 +221,7 @@ fn render_login(f: &mut Frame, state: &ScreenState) {
         .block(block)
         .alignment(ratatui::layout::Alignment::Center);
     f.render_widget(paragraph, chunks[0]);
-    let help = Paragraph::new("[Any key] Continue | [Ctrl+Q] Quit")
+    let help = Paragraph::new("[Any key] Continue | [Ctrl+W] Quit")
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[1]);
 }
@@ -267,7 +255,7 @@ fn render_main(f: &mut Frame, state: &mut ScreenState) {
     .row_highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
     .highlight_symbol(">> ");
     f.render_stateful_widget(table, chunks[0], &mut state.table_state);
-    let help = Paragraph::new("[Ctrl+Q] Quit | [Ctrl+N] Compose | [Enter] Read | [Up/Down] Move")
+    let help = Paragraph::new("[Ctrl+W] Quit | [Ctrl+N] Compose | [Enter] Read | [Up/Down] Move")
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[1]);
 }
@@ -318,9 +306,9 @@ fn render_reading(f: &mut Frame, reading: &ReadingFields) {
         ])
         .split(area);
     let fields = [
-        ("To", &reading.to),
-        ("Cc", &reading.cc),
-        ("Bcc", &reading.bcc),
+        ("To", &reading.from),
+        ("Cc", &reading.cc.join(", ")),
+        ("Bcc", &reading.bcc.join(", ")),
     ];
     for (i, (label, value)) in fields.iter().enumerate() {
         let block = Block::default().borders(Borders::ALL).title(*label);
