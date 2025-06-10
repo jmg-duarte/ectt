@@ -54,7 +54,8 @@ struct ComposeFields {
     cc: String,
     bcc: String,
     body: String,
-    focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
+    body_cursor: (usize, usize), // (line, col)
+    focused: usize,              // 0: to, 1: cc, 2: bcc, 3: body
 }
 
 struct ReadingFields {
@@ -89,6 +90,7 @@ impl Default for ScreenState {
                 cc: String::new(),
                 bcc: String::new(),
                 body: String::new(),
+                body_cursor: (0, 0),
                 focused: 0,
             },
             reading: ReadingFields {
@@ -158,41 +160,179 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
                         }
                         _ => {}
                     },
-                    Screen::Compose => match (key.code, key.modifiers) {
-                        (crossterm::event::KeyCode::Char('s'), KeyModifiers::CONTROL) => {
-                            state.screen = Screen::Main
-                        }
-                        (crossterm::event::KeyCode::Tab, _) => {
-                            state.compose.focused = (state.compose.focused + 1) % 4
-                        }
-                        (crossterm::event::KeyCode::BackTab, _) => {
-                            state.compose.focused = (state.compose.focused + 3) % 4
-                        }
-                        (crossterm::event::KeyCode::Esc, _) => state.screen = Screen::Main,
-                        (crossterm::event::KeyCode::Char(c), _) => match state.compose.focused {
-                            0 => state.compose.to.push(c),
-                            1 => state.compose.cc.push(c),
-                            2 => state.compose.bcc.push(c),
-                            3 => state.compose.body.push(c),
+                    Screen::Compose => {
+                        match (key.code, key.modifiers) {
+                            (crossterm::event::KeyCode::Char('s'), KeyModifiers::CONTROL) => {
+                                state.screen = Screen::Main
+                            }
+                            (crossterm::event::KeyCode::Tab, _) => {
+                                state.compose.focused = (state.compose.focused + 1) % 4
+                            }
+                            (crossterm::event::KeyCode::BackTab, _) => {
+                                state.compose.focused = (state.compose.focused + 3) % 4
+                            }
+                            (crossterm::event::KeyCode::Esc, _) => state.screen = Screen::Main,
+                            (crossterm::event::KeyCode::Char(c), _) => {
+                                match state.compose.focused {
+                                    0 => state.compose.to.push(c),
+                                    1 => state.compose.cc.push(c),
+                                    2 => state.compose.bcc.push(c),
+                                    3 => {
+                                        // Insert char at cursor
+                                        let (line, col) = state.compose.body_cursor;
+                                        let mut lines: Vec<String> = state
+                                            .compose
+                                            .body
+                                            .lines()
+                                            .map(|l| l.to_string())
+                                            .collect();
+                                        if lines.is_empty() {
+                                            lines.push(String::new());
+                                        }
+                                        if line >= lines.len() {
+                                            lines.resize(line + 1, String::new());
+                                        }
+                                        lines[line].insert(col, c);
+                                        state.compose.body = lines.join("\n");
+                                        state.compose.body_cursor.1 += 1;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            (crossterm::event::KeyCode::Enter, _) => {
+                                if state.compose.focused == 3 {
+                                    let (line, col) = state.compose.body_cursor;
+                                    let mut lines: Vec<String> =
+                                        state.compose.body.lines().map(|l| l.to_string()).collect();
+                                    if lines.is_empty() {
+                                        lines.push(String::new());
+                                    }
+                                    // If cursor is at a new line at the end, add an empty line
+                                    if line >= lines.len() {
+                                        lines.push(String::new());
+                                    }
+                                    // Defensive: ensure line is in bounds
+                                    if line < lines.len() {
+                                        let rest = lines[line][col..].to_string();
+                                        lines[line].truncate(col);
+                                        lines.insert(line + 1, rest);
+                                        state.compose.body = lines.join("\n");
+                                        state.compose.body_cursor = (line + 1, 0);
+                                    } else {
+                                        // If line is still out of bounds, just add a new empty line
+                                        lines.push(String::new());
+                                        state.compose.body = lines.join("\n");
+                                        state.compose.body_cursor = (lines.len() - 1, 0);
+                                    }
+                                }
+                            }
+                            (crossterm::event::KeyCode::Backspace, _) => {
+                                match state.compose.focused {
+                                    0 => {
+                                        state.compose.to.pop();
+                                    }
+                                    1 => {
+                                        state.compose.cc.pop();
+                                    }
+                                    2 => {
+                                        state.compose.bcc.pop();
+                                    }
+                                    3 => {
+                                        let (line, col) = state.compose.body_cursor;
+                                        let mut lines: Vec<String> = state
+                                            .compose
+                                            .body
+                                            .lines()
+                                            .map(|l| l.to_string())
+                                            .collect();
+                                        if lines.is_empty() {
+                                            lines.push(String::new());
+                                        }
+                                        if line < lines.len() {
+                                            if col > 0 && col <= lines[line].len() {
+                                                lines[line].remove(col - 1);
+                                                state.compose.body_cursor.1 -= 1;
+                                            } else if col == 0 && line > 0 {
+                                                // Merge with previous line
+                                                let prev_len = lines[line - 1].len();
+                                                let cur = lines.remove(line);
+                                                lines[line - 1].push_str(&cur);
+                                                state.compose.body_cursor = (line - 1, prev_len);
+                                            }
+                                        }
+                                        // Clamp cursor to valid position
+                                        let (mut line, mut col) = state.compose.body_cursor;
+                                        if line >= lines.len() {
+                                            line = lines.len().saturating_sub(1);
+                                        }
+                                        let line_len =
+                                            lines.get(line).map(|l| l.len()).unwrap_or(0);
+                                        if col > line_len {
+                                            col = line_len;
+                                        }
+                                        state.compose.body_cursor = (line, col);
+                                        state.compose.body = lines.join("\n");
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            (crossterm::event::KeyCode::Left, _) => {
+                                if state.compose.focused == 3 {
+                                    let (line, col) = state.compose.body_cursor;
+                                    if col > 0 {
+                                        state.compose.body_cursor.1 -= 1;
+                                    } else if line > 0 {
+                                        let prev_len = state
+                                            .compose
+                                            .body
+                                            .lines()
+                                            .nth(line - 1)
+                                            .map(|l| l.len())
+                                            .unwrap_or(0);
+                                        state.compose.body_cursor = (line - 1, prev_len);
+                                    }
+                                }
+                            }
+                            (crossterm::event::KeyCode::Right, _) => {
+                                if state.compose.focused == 3 {
+                                    let (line, col) = state.compose.body_cursor;
+                                    let lines: Vec<&str> = state.compose.body.lines().collect();
+                                    let line_len = lines.get(line).map(|l| l.len()).unwrap_or(0);
+                                    if col < line_len {
+                                        state.compose.body_cursor.1 += 1;
+                                    } else if line + 1 < lines.len() {
+                                        state.compose.body_cursor = (line + 1, 0);
+                                    }
+                                }
+                            }
+                            (crossterm::event::KeyCode::Up, _) => {
+                                if state.compose.focused == 3 {
+                                    let (line, col) = state.compose.body_cursor;
+                                    if line > 0 {
+                                        let prev_len = state
+                                            .compose
+                                            .body
+                                            .lines()
+                                            .nth(line - 1)
+                                            .map(|l| l.len())
+                                            .unwrap_or(0);
+                                        state.compose.body_cursor = (line - 1, col.min(prev_len));
+                                    }
+                                }
+                            }
+                            (crossterm::event::KeyCode::Down, _) => {
+                                if state.compose.focused == 3 {
+                                    let (line, col) = state.compose.body_cursor;
+                                    let lines: Vec<&str> = state.compose.body.lines().collect();
+                                    if line + 1 < lines.len() {
+                                        let next_len = lines[line + 1].len();
+                                        state.compose.body_cursor = (line + 1, col.min(next_len));
+                                    }
+                                }
+                            }
                             _ => {}
-                        },
-                        (crossterm::event::KeyCode::Backspace, _) => match state.compose.focused {
-                            0 => {
-                                state.compose.to.pop();
-                            }
-                            1 => {
-                                state.compose.cc.pop();
-                            }
-                            2 => {
-                                state.compose.bcc.pop();
-                            }
-                            3 => {
-                                state.compose.body.pop();
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    },
+                        }
+                    }
                     Screen::Reading => match key.code {
                         crossterm::event::KeyCode::Esc => state.screen = Screen::Main,
                         crossterm::event::KeyCode::Down => state.reading.scroll += 1,
@@ -276,7 +416,6 @@ fn render_compose(f: &mut Frame, compose: &ComposeFields) {
         ("To", &compose.to, compose.focused == 0),
         ("Cc", &compose.cc, compose.focused == 1),
         ("Bcc", &compose.bcc, compose.focused == 2),
-        ("Body", &compose.body, compose.focused == 3),
     ];
     for (i, (label, value, focused)) in fields.iter().enumerate() {
         let block = Block::default().borders(Borders::ALL).title(*label);
@@ -288,8 +427,38 @@ fn render_compose(f: &mut Frame, compose: &ComposeFields) {
         let para = Paragraph::new(value.as_str()).block(block).style(style);
         f.render_widget(para, chunks[i]);
     }
-    let help = Paragraph::new("[Ctrl+S] Send | [Tab] Next | [Shift+Tab] Prev | [Esc] Cancel")
-        .style(Style::default().fg(Color::DarkGray));
+    // Body field with cursor
+    let body_block = Block::default().borders(Borders::ALL).title("Body");
+    let body_style = if compose.focused == 3 {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let mut lines: Vec<String> = compose.body.lines().map(|l| l.to_string()).collect();
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    let (cur_line, cur_col) = compose.body_cursor;
+    if compose.focused == 3 {
+        if cur_line < lines.len() {
+            let l = &mut lines[cur_line];
+            if cur_col <= l.len() {
+                l.insert(cur_col, '▏'); // Unicode thin cursor
+            } else {
+                l.push('▏');
+            }
+        } else {
+            lines.push("▏".to_string());
+        }
+    }
+    let para = Paragraph::new(lines.join("\n"))
+        .block(body_block)
+        .style(body_style);
+    f.render_widget(para, chunks[3]);
+    let help = Paragraph::new(
+        "[Ctrl+S] Send | [Tab] Next | [Shift+Tab] Prev | [Esc] Cancel | [Arrows] Move | [Enter] Newline",
+    )
+    .style(Style::default().fg(Color::DarkGray));
     f.render_widget(help, chunks[4]);
 }
 
