@@ -105,11 +105,13 @@ async fn get_authorization(
         .set_pkce_challenge(pkce_challenge)
         .url();
 
-    tokio::io::stdout()
+    let mut stdout = tokio::io::stdout();
+    stdout
         .write_all(format!("Open URL: {}", auth_url).as_bytes())
         .await
         // If it fails writing to the stdout this error message is useless but ¯\_(ツ)_/¯
         .expect("Failed to write to stdout");
+    stdout.flush().await.expect("Failed to flush stdout");
 
     let http_client = reqwest::ClientBuilder::new()
         // Following redirects opens the client up to SSRF vulnerabilities.

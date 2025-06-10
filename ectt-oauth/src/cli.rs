@@ -1,7 +1,17 @@
 #[derive(Debug, Clone, clap::Parser)]
 pub struct App {
-    #[arg(default_value_t = Provider::Gmail)]
-    pub provider: Provider,
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Debug, Clone, clap::Subcommand)]
+pub enum Command {
+    Login {
+        #[arg(default_value_t = Provider::Gmail)]
+        provider: Provider,
+    },
+
+    Run {},
 }
 
 #[derive(Debug, Clone, Default, clap::ValueEnum)]

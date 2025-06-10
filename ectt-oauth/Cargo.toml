@@ -10,14 +10,17 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 clap = { workspace = true, features = ["derive"] }
 oauth2 = { workspace = true, features = ["reqwest-blocking"] }
-axum = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tokio-util = { workspace = true, features = ["rt"] }
 serde = { workspace = true, features = ["derive"] }
 imap = { workspace = true, default-features = false, features = ["rustls-tls"] }
 rustls = { workspace = true }
-base64 = { workspace = true }
+futures = { workspace = true }
+color-eyre = { workspace = true }
+crossterm = { workspace = true }
+ratatui = { workspace = true }
 
 [build-dependencies]
 serde = { workspace = true, features = ["derive"] }
