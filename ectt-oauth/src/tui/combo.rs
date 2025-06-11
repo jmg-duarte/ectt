@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -33,6 +33,9 @@ impl Display for KeyCombo {
         let mut first = true;
         for code in &self.codes {
             if first {
+                if !self.modifiers.is_empty() {
+                    f.write_char('+')?;
+                }
                 first = false;
                 f.write_str(&code.to_string())?;
                 continue;

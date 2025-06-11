@@ -6,7 +6,7 @@ use clap::Parser;
 use crossterm::event::{self, Event, KeyEvent};
 use ratatui::{DefaultTerminal, Frame};
 
-use crate::tui::compose::{handle_compose, ComposeFields};
+use crate::tui::compose::{handle_compose, ComposeWidget};
 use crate::tui::reading::{handle_reading, ReadingWidget};
 use crate::{cli::App, oauth::execute_authentication_flow};
 use crossterm::event::KeyModifiers;
@@ -56,7 +56,7 @@ struct ScreenState {
     screen: Screen,
     table_state: TableState,
     items: Vec<[&'static str; 3]>,
-    compose: ComposeFields,
+    compose: ComposeWidget,
     reading: ReadingWidget,
     login_url: String,
 }
@@ -71,7 +71,7 @@ impl Default for ScreenState {
                 ["2024-06-02", "Bob", "Second Post"],
                 ["2024-06-03", "Carol", "Third Post"],
             ],
-            compose: ComposeFields::default(),
+            compose: ComposeWidget::default(),
             reading: ReadingWidget::default(),
             login_url: "https://example.com/login".to_string(),
         }

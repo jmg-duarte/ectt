@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event, KeyEvent};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -6,9 +6,15 @@ use ratatui::{
     Frame,
 };
 
-use crate::{Screen, ScreenState};
+use crate::{
+    tui::{
+        combo::KeyCombo,
+        help::{HasHelp, HelpWidget},
+    },
+    Screen, ScreenState,
+};
 
-pub struct ComposeFields {
+pub struct ComposeWidget {
     to: String,
     cc: String,
     bcc: String,
@@ -17,7 +23,7 @@ pub struct ComposeFields {
     focused: usize,              // 0: to, 1: cc, 2: bcc, 3: body
 }
 
-impl Default for ComposeFields {
+impl Default for ComposeWidget {
     fn default() -> Self {
         Self {
             to: Default::default(),
@@ -30,7 +36,28 @@ impl Default for ComposeFields {
     }
 }
 
-impl ComposeFields {
+impl HasHelp for ComposeWidget {
+    fn help<'w>() -> super::help::HelpWidget<'w> {
+        HelpWidget::new(vec![
+            (
+                KeyCombo::new()
+                    .with_code(KeyCode::Char('S'))
+                    .with_modifier(KeyModifiers::CONTROL),
+                "Send",
+            ),
+            (KeyCombo::new().with_code(KeyCode::Tab), "Next"),
+            (
+                KeyCombo::new()
+                    .with_code(KeyCode::Tab)
+                    .with_modifier(KeyModifiers::SHIFT),
+                "Prev",
+            ),
+            (KeyCombo::new().with_code(KeyCode::Esc), "Cancel"),
+        ])
+    }
+}
+
+impl ComposeWidget {
     pub fn render_compose(&self, f: &mut Frame) {
         let area = f.area();
         let chunks = Layout::default()
@@ -86,11 +113,7 @@ impl ComposeFields {
             .block(body_block)
             .style(body_style);
         f.render_widget(para, chunks[3]);
-        let help = Paragraph::new(
-        "[Ctrl+S] Send | [Tab] Next | [Shift+Tab] Prev | [Esc] Cancel | [Arrows] Move | [Enter] Newline",
-    )
-    .style(Style::default().fg(Color::DarkGray));
-        f.render_widget(help, chunks[4]);
+        f.render_widget(Self::help(), chunks[4]);
     }
 }
 
