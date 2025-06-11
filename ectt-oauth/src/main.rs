@@ -49,23 +49,6 @@ enum Screen {
     Reading, // Read an email
 }
 
-struct ComposeFields {
-    to: String,
-    cc: String,
-    bcc: String,
-    body: String,
-    body_cursor: (usize, usize), // (line, col)
-    focused: usize,              // 0: to, 1: cc, 2: bcc, 3: body
-}
-
-struct ReadingFields {
-    from: String,
-    cc: Vec<String>,
-    bcc: Vec<String>,
-    body: String,
-    scroll: u16,
-}
-
 struct ScreenState {
     screen: Screen,
     table_state: TableState,
@@ -103,6 +86,60 @@ impl Default for ScreenState {
             },
             login_url: "https://example.com/login".to_string(),
         }
+    }
+}
+
+impl ScreenState {
+    fn render_login(&self, f: &mut Frame) {
+        let area = f.area();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .split(area);
+        let block = Block::default().borders(Borders::ALL).title("Login");
+        let text = format!("Open URL: {}", self.login_url);
+        let paragraph = Paragraph::new(text)
+            .block(block)
+            .alignment(ratatui::layout::Alignment::Center);
+        f.render_widget(paragraph, chunks[0]);
+        let help = Paragraph::new("[Any key] Continue | [Ctrl+W] Quit")
+            .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(help, chunks[1]);
+    }
+
+    fn render_main(&mut self, f: &mut Frame) {
+        let area = f.area();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .split(area);
+        let header = Row::new(vec![
+            Cell::from("Date"),
+            Cell::from("Author"),
+            Cell::from("Title"),
+        ])
+        .style(Style::default().add_modifier(Modifier::BOLD));
+        let rows = self
+            .items
+            .iter()
+            .map(|item| Row::new(item.iter().map(|c| Cell::from(*c))));
+        let table = Table::new(
+            rows,
+            &[
+                Constraint::Length(12),
+                Constraint::Length(10),
+                Constraint::Min(20),
+            ],
+        )
+        .header(header)
+        .block(Block::default().borders(Borders::ALL).title("Posts"))
+        .row_highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
+        .highlight_symbol(">> ");
+        f.render_stateful_widget(table, chunks[0], &mut self.table_state);
+        let help =
+            Paragraph::new("[Ctrl+W] Quit | [Ctrl+N] Compose | [Enter] Read | [Up/Down] Move")
+                .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(help, chunks[1]);
     }
 }
 
@@ -347,10 +384,10 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
 
     loop {
         terminal.draw(|f| match state.screen {
-            Screen::Login => render_login(f, &state),
-            Screen::Main => render_main(f, &mut state),
-            Screen::Compose => render_compose(f, &state.compose),
-            Screen::Reading => render_reading(f, &state.reading),
+            Screen::Login => state.render_login(f),
+            Screen::Main => state.render_main(f),
+            Screen::Compose => state.compose.render_compose(f),
+            Screen::Reading => state.reading.render_reading(f),
         })?;
 
         if event::poll(std::time::Duration::from_millis(200))? {
@@ -366,148 +403,118 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
     }
 }
 
-fn render_login(f: &mut Frame, state: &ScreenState) {
-    let area = f.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(area);
-    let block = Block::default().borders(Borders::ALL).title("Login");
-    let text = format!("Open URL: {}", state.login_url);
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .alignment(ratatui::layout::Alignment::Center);
-    f.render_widget(paragraph, chunks[0]);
-    let help = Paragraph::new("[Any key] Continue | [Ctrl+W] Quit")
-        .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[1]);
+struct ComposeFields {
+    to: String,
+    cc: String,
+    bcc: String,
+    body: String,
+    body_cursor: (usize, usize), // (line, col)
+    focused: usize,              // 0: to, 1: cc, 2: bcc, 3: body
 }
 
-fn render_main(f: &mut Frame, state: &mut ScreenState) {
-    let area = f.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(area);
-    let header = Row::new(vec![
-        Cell::from("Date"),
-        Cell::from("Author"),
-        Cell::from("Title"),
-    ])
-    .style(Style::default().add_modifier(Modifier::BOLD));
-    let rows = state
-        .items
-        .iter()
-        .map(|item| Row::new(item.iter().map(|c| Cell::from(*c))));
-    let table = Table::new(
-        rows,
-        &[
-            Constraint::Length(12),
-            Constraint::Length(10),
-            Constraint::Min(20),
-        ],
-    )
-    .header(header)
-    .block(Block::default().borders(Borders::ALL).title("Posts"))
-    .row_highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
-    .highlight_symbol(">> ");
-    f.render_stateful_widget(table, chunks[0], &mut state.table_state);
-    let help = Paragraph::new("[Ctrl+W] Quit | [Ctrl+N] Compose | [Enter] Read | [Up/Down] Move")
-        .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[1]);
-}
-
-fn render_compose(f: &mut Frame, compose: &ComposeFields) {
-    let area = f.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(1),
-        ])
-        .split(area);
-    let fields = [
-        ("To", &compose.to, compose.focused == 0),
-        ("Cc", &compose.cc, compose.focused == 1),
-        ("Bcc", &compose.bcc, compose.focused == 2),
-    ];
-    for (i, (label, value, focused)) in fields.iter().enumerate() {
-        let block = Block::default().borders(Borders::ALL).title(*label);
-        let style = if *focused {
+impl ComposeFields {
+    fn render_compose(&self, f: &mut Frame) {
+        let area = f.area();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(1),
+            ])
+            .split(area);
+        let fields = [
+            ("To", &self.to, self.focused == 0),
+            ("Cc", &self.cc, self.focused == 1),
+            ("Bcc", &self.bcc, self.focused == 2),
+        ];
+        for (i, (label, value, focused)) in fields.iter().enumerate() {
+            let block = Block::default().borders(Borders::ALL).title(*label);
+            let style = if *focused {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default()
+            };
+            let para = Paragraph::new(value.as_str()).block(block).style(style);
+            f.render_widget(para, chunks[i]);
+        }
+        // Body field with cursor
+        let body_block = Block::default().borders(Borders::ALL).title("Body");
+        let body_style = if self.focused == 3 {
             Style::default().fg(Color::Yellow)
         } else {
             Style::default()
         };
-        let para = Paragraph::new(value.as_str()).block(block).style(style);
-        f.render_widget(para, chunks[i]);
-    }
-    // Body field with cursor
-    let body_block = Block::default().borders(Borders::ALL).title("Body");
-    let body_style = if compose.focused == 3 {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default()
-    };
-    let mut lines: Vec<String> = compose.body.lines().map(|l| l.to_string()).collect();
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
-    let (cur_line, cur_col) = compose.body_cursor;
-    if compose.focused == 3 {
-        if cur_line < lines.len() {
-            let l = &mut lines[cur_line];
-            if cur_col <= l.len() {
-                l.insert(cur_col, '▏'); // Unicode thin cursor
-            } else {
-                l.push('▏');
-            }
-        } else {
-            lines.push("▏".to_string());
+        let mut lines: Vec<String> = self.body.lines().map(|l| l.to_string()).collect();
+        if lines.is_empty() {
+            lines.push(String::new());
         }
-    }
-    let para = Paragraph::new(lines.join("\n"))
-        .block(body_block)
-        .style(body_style);
-    f.render_widget(para, chunks[3]);
-    let help = Paragraph::new(
+        let (cur_line, cur_col) = self.body_cursor;
+        if self.focused == 3 {
+            if cur_line < lines.len() {
+                let l = &mut lines[cur_line];
+                if cur_col <= l.len() {
+                    l.insert(cur_col, '▏'); // Unicode thin cursor
+                } else {
+                    l.push('▏');
+                }
+            } else {
+                lines.push("▏".to_string());
+            }
+        }
+        let para = Paragraph::new(lines.join("\n"))
+            .block(body_block)
+            .style(body_style);
+        f.render_widget(para, chunks[3]);
+        let help = Paragraph::new(
         "[Ctrl+S] Send | [Tab] Next | [Shift+Tab] Prev | [Esc] Cancel | [Arrows] Move | [Enter] Newline",
     )
     .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[4]);
+        f.render_widget(help, chunks[4]);
+    }
 }
 
-fn render_reading(f: &mut Frame, reading: &ReadingFields) {
-    let area = f.area();
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(1),
-        ])
-        .split(area);
-    let fields = [
-        ("To", &reading.from),
-        ("Cc", &reading.cc.join(", ")),
-        ("Bcc", &reading.bcc.join(", ")),
-    ];
-    for (i, (label, value)) in fields.iter().enumerate() {
-        let block = Block::default().borders(Borders::ALL).title(*label);
-        let para = Paragraph::new(value.as_str()).block(block);
-        f.render_widget(para, chunks[i]);
+struct ReadingFields {
+    from: String,
+    cc: Vec<String>,
+    bcc: Vec<String>,
+    body: String,
+    scroll: u16,
+}
+
+impl ReadingFields {
+    fn render_reading(&self, f: &mut Frame) {
+        let area = f.area();
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(1),
+            ])
+            .split(area);
+        let fields = [
+            ("To", &self.from),
+            ("Cc", &self.cc.join(", ")),
+            ("Bcc", &self.bcc.join(", ")),
+        ];
+        for (i, (label, value)) in fields.iter().enumerate() {
+            let block = Block::default().borders(Borders::ALL).title(*label);
+            let para = Paragraph::new(value.as_str()).block(block);
+            f.render_widget(para, chunks[i]);
+        }
+        let body_block = Block::default().borders(Borders::ALL).title("Body");
+        let para = Paragraph::new(self.body.as_str())
+            .block(body_block)
+            .wrap(Wrap { trim: false })
+            .scroll((self.scroll, 0));
+        f.render_widget(para, chunks[3]);
+        let help = Paragraph::new("[Esc] Back | [Up/Down] Scroll")
+            .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(help, chunks[4]);
     }
-    let body_block = Block::default().borders(Borders::ALL).title("Body");
-    let para = Paragraph::new(reading.body.as_str())
-        .block(body_block)
-        .wrap(Wrap { trim: false })
-        .scroll((reading.scroll, 0));
-    f.render_widget(para, chunks[3]);
-    let help =
-        Paragraph::new("[Esc] Back | [Up/Down] Scroll").style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[4]);
 }
