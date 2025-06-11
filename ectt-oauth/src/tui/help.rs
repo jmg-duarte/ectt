@@ -1,4 +1,3 @@
-use crossterm::event::KeyCode;
 use itertools::Itertools;
 use ratatui::{
     layout::Rect,
@@ -6,14 +5,16 @@ use ratatui::{
     widgets::{Paragraph, Widget},
 };
 
+use crate::tui::combo::KeyCombo;
+
 pub struct HelpWidget<'w> {
     /// Vector of available keys and a string for their actions.
     // NOTE: There is definitely better ways of representing this
-    actions: &'w [(&'w [KeyCode], &'w str)],
+    actions: Vec<(KeyCombo, &'w str)>,
 }
 
 impl<'w> HelpWidget<'w> {
-    pub fn new(actions: &'w [(&'w [KeyCode], &'w str)]) -> Self {
+    pub fn new(actions: Vec<(KeyCombo, &'w str)>) -> Self {
         Self { actions }
     }
 }
@@ -26,12 +27,7 @@ impl<'w> Widget for HelpWidget<'w> {
         let text = self
             .actions
             .into_iter()
-            .map(|(key_codes, action)| {
-                let mut text = key_codes.into_iter().map(|k| k.to_string()).join("/");
-                text.push_str(" ");
-                text.push_str(&action);
-                text
-            })
+            .map(|(combo, action)| format!("{combo}: {action}"))
             .join(" | ");
 
         Paragraph::new(text)

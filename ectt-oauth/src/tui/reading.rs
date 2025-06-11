@@ -7,7 +7,10 @@ use ratatui::{
 };
 
 use crate::{
-    tui::help::{HasHelp, HelpWidget},
+    tui::{
+        combo::KeyCombo,
+        help::{HasHelp, HelpWidget},
+    },
     Screen, ScreenState,
 };
 
@@ -34,9 +37,14 @@ impl Default for ReadingWidget {
 
 impl HasHelp for ReadingWidget {
     fn help<'w>() -> HelpWidget<'w> {
-        HelpWidget::new(&[
-            (&[KeyCode::Esc], "Back"),
-            (&[KeyCode::Down, KeyCode::Up], "Scroll"),
+        HelpWidget::new(vec![
+            (KeyCombo::new().with_code(KeyCode::Esc), "Back"),
+            (
+                KeyCombo::new()
+                    .with_code(KeyCode::Down)
+                    .with_code(KeyCode::Up),
+                "Scroll",
+            ),
         ])
     }
 }
