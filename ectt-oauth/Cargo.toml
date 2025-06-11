@@ -22,6 +22,7 @@ color-eyre = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
 tui-textarea = { workspace = true }
+itertools = { workspace = true }
 
 [build-dependencies]
 serde = { workspace = true, features = ["derive"] }

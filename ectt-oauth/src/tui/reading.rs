@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
@@ -6,9 +6,12 @@ use ratatui::{
     Frame,
 };
 
-use crate::{Screen, ScreenState};
+use crate::{
+    tui::help::{HasHelp, HelpWidget},
+    Screen, ScreenState,
+};
 
-pub struct ReadingFields {
+pub struct ReadingWidget {
     from: String,
     cc: Vec<String>,
     bcc: Vec<String>,
@@ -16,7 +19,7 @@ pub struct ReadingFields {
     scroll: u16,
 }
 
-impl Default for ReadingFields {
+impl Default for ReadingWidget {
     fn default() -> Self {
         Self {
             from: "alice@example.com".to_string(),
@@ -29,8 +32,17 @@ impl Default for ReadingFields {
     }
 }
 
-impl ReadingFields {
-    pub fn render_reading(&self, f: &mut Frame) {
+impl HasHelp for ReadingWidget {
+    fn help<'w>() -> HelpWidget<'w> {
+        HelpWidget::new(&[
+            (&[KeyCode::Esc], "Back"),
+            (&[KeyCode::Down, KeyCode::Up], "Scroll"),
+        ])
+    }
+}
+
+impl ReadingWidget {
+    pub fn render_widget(&self, f: &mut Frame) {
         let area = f.area();
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -58,9 +70,7 @@ impl ReadingFields {
             .wrap(Wrap { trim: false })
             .scroll((self.scroll, 0));
         f.render_widget(para, chunks[3]);
-        let help = Paragraph::new("[Esc] Back | [Up/Down] Scroll")
-            .style(Style::default().fg(Color::DarkGray));
-        f.render_widget(help, chunks[4]);
+        f.render_widget(Self::help(), chunks[4]);
     }
 }
 
