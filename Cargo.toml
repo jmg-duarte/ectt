@@ -28,3 +28,5 @@ futures = "0.3.31"
 color-eyre = "0.6.3"
 crossterm = "0.28.1"
 ratatui = "0.29.0"
+
+# https://github.com/rhysd/tui-textarea
