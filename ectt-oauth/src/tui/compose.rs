@@ -18,7 +18,7 @@ use crate::{
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
     },
-    Screen, ScreenState,
+    Action, Screen, ScreenState,
 };
 
 #[derive(Debug, Default)]
@@ -75,10 +75,10 @@ impl<'w> HasHelp for ComposeWidget<'w> {
 }
 
 impl<'w> ComposeWidget<'w> {
-    pub fn handle_event(&mut self, event: Event) {
+    pub fn handle_event(&mut self, event: Event) -> Action {
         match event {
             Event::Key(key_event) => self.handle_key_event(key_event),
-            _ => {}
+            _ => Action::Tick,
         }
     }
 
@@ -87,20 +87,23 @@ impl<'w> ComposeWidget<'w> {
         event @ KeyEvent {
             code, modifiers, ..
         }: KeyEvent,
-    ) {
+    ) -> Action {
         match (code, modifiers) {
             (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
-                todo!("state.screen = Screen::Main");
+                // TODO: send email
+                Action::GoTo(Screen::Main)
             }
+            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(Screen::Main),
             (crossterm::event::KeyCode::Tab, _) => {
                 self.focused = (self.focused + 1) % 4;
                 self.update_focused();
+                Action::Tick
             }
             (crossterm::event::KeyCode::BackTab, _) => {
                 self.focused = (self.focused + 3) % 4;
                 self.update_focused();
+                Action::Tick
             }
-            (crossterm::event::KeyCode::Esc, _) => todo!("state.screen = Screen::Main"),
             _ => {
                 match self.focused {
                     0 => self.to.input(event),
@@ -109,6 +112,7 @@ impl<'w> ComposeWidget<'w> {
                     3 => self.body.as_mut().input(event),
                     _ => unreachable!(),
                 };
+                Action::Tick
             }
         }
     }

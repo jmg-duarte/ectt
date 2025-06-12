@@ -52,6 +52,12 @@ enum Screen {
     Reading, // Read an email
 }
 
+enum Action {
+    Quit,
+    Tick,
+    GoTo(Screen),
+}
+
 struct ScreenState<'w> {
     screen: Screen,
     table_state: TableState,
@@ -200,8 +206,16 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             match state.screen {
                 Screen::Login => handle_login(&mut state, event),
                 Screen::Main => handle_main(&mut state, event),
-                Screen::Compose => state.compose.handle_event(event),
-                Screen::Reading => state.reading.handle_event(event),
+                Screen::Compose => match state.compose.handle_event(event) {
+                    Action::Quit => break Ok(()),
+                    Action::Tick => continue,
+                    Action::GoTo(screen) => state.screen = screen,
+                },
+                Screen::Reading => match state.reading.handle_event(event) {
+                    Action::Quit => break Ok(()),
+                    Action::Tick => continue,
+                    Action::GoTo(screen) => state.screen = screen,
+                },
             }
         }
     }

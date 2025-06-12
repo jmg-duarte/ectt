@@ -18,7 +18,7 @@ use crate::{
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
     },
-    Screen, ScreenState,
+    Action, Screen, ScreenState,
 };
 
 #[derive(Debug, Default)]
@@ -74,10 +74,10 @@ impl<'w> HasHelp for ReadingWidget<'w> {
 }
 
 impl<'w> ReadingWidget<'w> {
-    pub fn handle_event(&mut self, event: Event) {
+    pub fn handle_event(&mut self, event: Event) -> Action {
         match event {
             Event::Key(key_event) => self.handle_key_event(key_event),
-            _ => {}
+            _ => Action::Tick,
         }
     }
 
@@ -86,26 +86,26 @@ impl<'w> ReadingWidget<'w> {
         event @ KeyEvent {
             code, modifiers, ..
         }: KeyEvent,
-    ) {
+    ) -> Action {
         match (code, modifiers) {
-            (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
-                todo!("state.screen = Screen::Main");
-            }
+            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(Screen::Main),
             (crossterm::event::KeyCode::Tab, _) => {
                 self.focused = (self.focused + 1) % 4;
                 self.update_focused();
+                Action::Tick
             }
             (crossterm::event::KeyCode::BackTab, _) => {
                 self.focused = (self.focused + 3) % 4;
                 self.update_focused();
+                Action::Tick
             }
-            (crossterm::event::KeyCode::Esc, _) => todo!("state.screen = Screen::Main"),
             (crossterm::event::KeyCode::Char(_), _)
             | (crossterm::event::KeyCode::Backspace, _)
             | (crossterm::event::KeyCode::Delete, _) => {
                 // Ignore editing inputs
                 // this could be placed in the underlying component too but
                 // the logic there would become more complicated, here is good enough
+                Action::Tick
             }
             _ => {
                 match self.focused {
@@ -115,6 +115,7 @@ impl<'w> ReadingWidget<'w> {
                     3 => self.body.as_mut().input(event),
                     _ => unreachable!(),
                 };
+                Action::Tick
             }
         }
     }
