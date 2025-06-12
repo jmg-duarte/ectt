@@ -12,7 +12,7 @@ use crate::{
         combo::KeyCombo,
         help::{HasHelp, HelpWidget},
     },
-    Action, Screen,
+    Action, Page,
 };
 
 pub struct InboxWidget<'w> {
@@ -68,11 +68,11 @@ impl<'w> InboxWidget<'w> {
         match (code, modifiers) {
             (crossterm::event::KeyCode::Char('w'), KeyModifiers::CONTROL) => Action::Quit,
             (crossterm::event::KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                Action::GoTo(Screen::Compose(Default::default()))
+                Action::GoTo(Page::Compose)
             }
             (crossterm::event::KeyCode::Enter, _) => {
                 // TODO: read the email from the "provider"
-                Action::GoTo(Screen::Reading(Default::default()))
+                Action::GoTo(Page::Reading)
             }
             (crossterm::event::KeyCode::Down, _) => {
                 state.select_next();

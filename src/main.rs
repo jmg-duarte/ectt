@@ -6,19 +6,16 @@ use std::env::current_dir;
 use std::fs::OpenOptions;
 
 use clap::Parser;
-use crossterm::event::{self, Event, KeyEvent};
+use crossterm::event::{self};
 use dirs::config_dir;
-use ratatui::{widgets, DefaultTerminal, Frame};
+use ratatui::DefaultTerminal;
 
 use crate::tui::compose::ComposeWidget;
 use crate::tui::inbox::InboxWidget;
 use crate::tui::login::LoginWidget;
 use crate::tui::reading::ReadingWidget;
 use crate::{cli::App, oauth::execute_authentication_flow};
-use crossterm::event::KeyModifiers;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState};
+use ratatui::widgets::TableState;
 
 #[derive(Debug, thiserror::Error)]
 enum Error {
@@ -79,32 +76,49 @@ enum Screen<'w> {
     Reading(ReadingWidget<'w>),
 }
 
-pub enum Action<'w> {
-    Quit,
-    Tick,
-    Back,
-    GoTo(Screen<'w>),
+pub enum Page {
+    Login,
+    Inbox,
+    Compose,
+    Reading,
 }
 
-struct ScreenState<'w> {
-    screen: Screen<'w>,
+impl<'w> From<Page> for Screen<'w> {
+    fn from(value: Page) -> Self {
+        match value {
+            Page::Login => Screen::Login(LoginWidget::new("http://localhost:8000".to_string())),
+            Page::Inbox => Screen::Inbox(InboxWidget::new()),
+            Page::Compose => Screen::Compose(ComposeWidget::default()),
+            Page::Reading => Screen::Reading(ReadingWidget::default()),
+        }
+    }
+}
+
+pub enum Action {
+    Quit,
+    Tick,
+    GoTo(Page),
+}
+
+struct ScreenState {
     table_state: TableState,
 }
 
-impl<'w> Default for ScreenState<'w> {
+impl Default for ScreenState {
     fn default() -> Self {
         Self {
-            screen: Screen::Login(LoginWidget::new("https://example.com/login".to_string())),
             table_state: TableState::default(),
         }
     }
 }
 fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
+    let mut screen = Screen::from(Page::Login);
+
     let mut state = ScreenState::default();
     state.table_state.select(Some(0));
 
     loop {
-        terminal.draw(|f| match &mut state.screen {
+        terminal.draw(|f| match &screen {
             Screen::Login(widget) => f.render_widget(&*widget, f.area()),
             Screen::Inbox(widget) => {
                 f.render_stateful_widget(&*widget, f.area(), &mut state.table_state)
@@ -116,7 +130,7 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
         if event::poll(std::time::Duration::from_millis(200))? {
             let event = event::read()?;
 
-            let action = match &mut state.screen {
+            let action = match &mut screen {
                 Screen::Login(widget) => widget.handle_event(event),
                 Screen::Inbox(widget) => widget.handle_event(event, &mut state.table_state),
                 Screen::Compose(widget) => widget.handle_event(event),
@@ -126,8 +140,7 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             match action {
                 Action::Quit => break Ok(()),
                 Action::Tick => continue,
-                Action::Back => state.screen = Screen::Inbox(InboxWidget::new()),
-                Action::GoTo(_) => state.screen = Screen::Inbox(InboxWidget::new()),
+                Action::GoTo(new_screen) => screen = Screen::from(new_screen),
             };
         }
     }

@@ -76,9 +76,9 @@ impl<'w> ComposeWidget<'w> {
         match (code, modifiers) {
             (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
                 // TODO: send email
-                Action::Back
+                Action::GoTo(crate::Page::Inbox)
             }
-            (crossterm::event::KeyCode::Esc, _) => Action::Back,
+            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(crate::Page::Inbox),
             (crossterm::event::KeyCode::Tab, _) => {
                 self.focused = (self.focused + 1) % 4;
                 self.update_focused();

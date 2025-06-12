@@ -12,7 +12,7 @@ use crate::{
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
     },
-    Action,
+    Action, Page,
 };
 pub struct ReadingWidget<'w> {
     focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
@@ -72,7 +72,7 @@ impl<'w> ReadingWidget<'w> {
         }: KeyEvent,
     ) -> Action {
         match (code, modifiers) {
-            (crossterm::event::KeyCode::Esc, _) => Action::Back,
+            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(Page::Inbox),
             (crossterm::event::KeyCode::Tab, _) => {
                 self.focused = (self.focused + 1) % 4;
                 self.update_focused();

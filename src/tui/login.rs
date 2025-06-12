@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     widgets::{Block, Borders, Paragraph, Widget},
@@ -41,7 +41,7 @@ impl<'w> LoginWidget<'w> {
     ) -> Action {
         match (code, modifiers) {
             (KeyCode::Esc, _) => Action::Quit,
-            (KeyCode::Enter, _) => Action::Back,
+            (KeyCode::Enter, _) => Action::GoTo(crate::Page::Inbox),
             _ => {
                 // TODO: solve this later, we need to advance the status
                 Action::Tick
