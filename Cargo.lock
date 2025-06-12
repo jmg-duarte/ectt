@@ -567,8 +567,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
-name = "ectt-oauth"
-version = "0.1.0"
+name = "ectt"
+version = "0.0.0"
 dependencies = [
  "axum",
  "clap",
@@ -1734,9 +1734,7 @@ checksum = "a2f8e5513d63f2e5b386eb5106dc67eaf3f84e95258e210489136b8b92ad6119"
 dependencies = [
  "base64",
  "bytes",
- "futures-channel",
  "futures-core",
- "futures-util",
  "http",
  "http-body",
  "http-body-util",

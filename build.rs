@@ -19,7 +19,7 @@ pub struct GoogleCredentials {
 }
 
 fn main() {
-    let credentials = ["../gapi.creds.json", "gapi.creds.json"]
+    let credentials = ["gapi.creds.json", "../gapi.creds.json"]
         .into_iter()
         .find_map(|p| {
             let credentials_path = current_dir()
