@@ -2,8 +2,12 @@ mod cli;
 mod oauth;
 mod tui;
 
+use std::env::current_dir;
+use std::fs::OpenOptions;
+
 use clap::Parser;
 use crossterm::event::{self, Event, KeyEvent};
+use dirs::config_dir;
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::tui::compose::ComposeWidget;
@@ -37,8 +41,29 @@ fn main() -> Result<(), Error> {
         }
         cli::Command::Run {} => {
             color_eyre::install().unwrap();
-            let terminal = ratatui::init();
-            let result = run(terminal);
+
+            let mut config_path = match config_dir() {
+                Some(dir) => dir,
+                None => {
+                    tracing::warn!(
+                    "Failed to find a configuration directory, defaulting to the current one..."
+                );
+                    current_dir()?
+                }
+            };
+            config_path.push("ectt.json");
+
+            let result = if let Err(err) = OpenOptions::new().open(config_path) {
+                tracing::warn!(
+                    "Failed to read configuration file (error: {err}), re-configuring..."
+                );
+                let terminal = ratatui::init();
+                run(terminal)
+                // TODO: launch login
+            } else {
+                let terminal = ratatui::init();
+                run(terminal)
+            };
             ratatui::restore();
             Ok(result?)
         }
