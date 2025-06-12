@@ -30,13 +30,14 @@ pub struct ComposeState {
 }
 
 pub struct ComposeWidget<'w> {
-    state: ComposeState,
+    state: ComposeState, // TODO: handle ctrl+s to send the email
+
+    focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
 
     to: AddressWidget<'w>,
     cc: AddressWidget<'w>,
     bcc: AddressWidget<'w>,
     body: BodyWidget<'w>,
-    focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
 }
 
 impl<'w> Default for ComposeWidget<'w> {
@@ -102,9 +103,9 @@ impl<'w> ComposeWidget<'w> {
             (crossterm::event::KeyCode::Esc, _) => todo!("state.screen = Screen::Main"),
             _ => {
                 match self.focused {
-                    0 => self.to.as_mut().input(event),
-                    1 => self.cc.as_mut().input(event),
-                    2 => self.bcc.as_mut().input(event),
+                    0 => self.to.input(event),
+                    1 => self.cc.input(event),
+                    2 => self.bcc.input(event),
                     3 => self.body.as_mut().input(event),
                     _ => unreachable!(),
                 };

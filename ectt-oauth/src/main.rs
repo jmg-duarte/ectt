@@ -6,7 +6,7 @@ use clap::Parser;
 use crossterm::event::{self, Event, KeyEvent};
 use ratatui::{DefaultTerminal, Frame};
 
-use crate::tui::compose::{handle_compose, ComposeWidget};
+use crate::tui::compose::ComposeWidget;
 use crate::tui::reading::{handle_reading, ReadingWidget};
 use crate::{cli::App, oauth::execute_authentication_flow};
 use crossterm::event::KeyModifiers;

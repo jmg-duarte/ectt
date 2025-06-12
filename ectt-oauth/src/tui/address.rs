@@ -1,3 +1,4 @@
+use crossterm::event::KeyEvent;
 use ratatui::{
     style::{Color, Style, Stylize},
     widgets::{block::Title, Block, Borders, Widget},
@@ -20,6 +21,16 @@ impl<'w> AddressWidget<'w> {
                 textarea.set_block(Block::default().borders(Borders::ALL).title(title));
                 textarea
             },
+        }
+    }
+
+    pub fn input(&mut self, event @ KeyEvent { code, .. }: KeyEvent) -> bool {
+        match code {
+            crossterm::event::KeyCode::Enter => {
+                // ignore enter because we don't support newlines here
+                return false;
+            }
+            _ => self.textarea.input(event),
         }
     }
 }
@@ -57,6 +68,6 @@ impl<'w> FocusStyle for AddressWidget<'w> {
         let Some(block) = self.textarea.block() else {
             return;
         };
-        self.textarea.set_block(block.clone().fg(Color::Yellow));
+        self.textarea.set_block(block.clone().fg(Color::Blue));
     }
 }

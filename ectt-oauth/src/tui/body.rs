@@ -57,6 +57,6 @@ impl<'w> FocusStyle for BodyWidget<'w> {
         let Some(block) = self.textarea.block() else {
             return;
         };
-        self.textarea.set_block(block.clone().fg(Color::Yellow));
+        self.textarea.set_block(block.clone().fg(Color::Blue));
     }
 }
