@@ -24,6 +24,18 @@ impl<'w> AddressWidget<'w> {
         }
     }
 
+    pub fn with_contents<T: Into<Title<'w>>>(title: T, contents: String) -> Self {
+        Self {
+            textarea: {
+                let mut textarea = TextArea::new(vec![contents]);
+                textarea.set_cursor_line_style(Style::default());
+                // textarea.set_placeholder_text("john.doe@kagi.com");
+                textarea.set_block(Block::default().borders(Borders::ALL).title(title));
+                textarea
+            },
+        }
+    }
+
     pub fn input(&mut self, event @ KeyEvent { code, .. }: KeyEvent) -> bool {
         match code {
             crossterm::event::KeyCode::Enter => {

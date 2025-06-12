@@ -7,7 +7,7 @@ use crossterm::event::{self, Event, KeyEvent};
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::tui::compose::ComposeWidget;
-use crate::tui::reading::{handle_reading, ReadingWidget};
+use crate::tui::reading::ReadingWidget;
 use crate::{cli::App, oauth::execute_authentication_flow};
 use crossterm::event::KeyModifiers;
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -57,7 +57,7 @@ struct ScreenState<'w> {
     table_state: TableState,
     items: Vec<[&'static str; 3]>,
     compose: ComposeWidget<'w>,
-    reading: ReadingWidget,
+    reading: ReadingWidget<'w>,
     login_url: String,
 }
 
@@ -191,7 +191,7 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             Screen::Login => state.render_login(f),
             Screen::Main => state.render_main(f),
             Screen::Compose => state.compose.render_compose(f),
-            Screen::Reading => state.reading.render_widget(f),
+            Screen::Reading => state.reading.render_reading(f),
         })?;
 
         if event::poll(std::time::Duration::from_millis(200))? {
@@ -201,7 +201,7 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
                 Screen::Login => handle_login(&mut state, event),
                 Screen::Main => handle_main(&mut state, event),
                 Screen::Compose => state.compose.handle_event(event),
-                Screen::Reading => handle_reading(&mut state, event),
+                Screen::Reading => state.reading.handle_event(event),
             }
         }
     }

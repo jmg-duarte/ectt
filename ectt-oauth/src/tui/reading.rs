@@ -1,56 +1,137 @@
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use std::{default, hint::unreachable_unchecked};
+
+use color_eyre::owo_colors::OwoColorize;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    style::{Color, Style, Stylize},
+    widgets::{block::Title, Block, Borders, Paragraph, Widget},
     Frame,
 };
+use tui_textarea::TextArea;
 
 use crate::{
     tui::{
+        address::{self, AddressWidget},
+        body::BodyWidget,
         combo::KeyCombo,
+        focus::FocusStyle,
         help::{HasHelp, HelpWidget},
     },
     Screen, ScreenState,
 };
 
-pub struct ReadingWidget {
-    from: String,
-    cc: Vec<String>,
-    bcc: Vec<String>,
-    body: String,
-    scroll: u16,
+#[derive(Debug, Default)]
+pub struct ReadingState {
+    to: String,
+    cc: String,
+    bcc: String,
+    body: Vec<String>,
 }
 
-impl Default for ReadingWidget {
+pub struct ReadingWidget<'w> {
+    state: ReadingState, // TODO: handle ctrl+s to send the email
+
+    focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
+
+    to: AddressWidget<'w>,
+    cc: AddressWidget<'w>,
+    bcc: AddressWidget<'w>,
+    body: BodyWidget<'w>,
+}
+
+impl<'w> Default for ReadingWidget<'w> {
     fn default() -> Self {
         Self {
-            from: "alice@example.com".to_string(),
-            cc: vec!["bob@example.com".to_string()],
-            bcc: vec!["carol@example.com".to_string()],
-            body: "This is the email body.\nIt can be very long and should wrap and scroll."
-                .to_string(),
-            scroll: 0,
+            state: Default::default(),
+            to: {
+                let mut widget = AddressWidget::with_contents("To", "jose@kagi.com".to_string());
+                // ensure its focused on the first render
+                widget.focused();
+                widget
+            },
+            cc: AddressWidget::with_contents("Cc", "jose@kagi.com".to_string()),
+            bcc: AddressWidget::with_contents("Bcc", "jose@kagi.com".to_string()),
+            body: BodyWidget::new(),
+            focused: Default::default(),
         }
     }
 }
 
-impl HasHelp for ReadingWidget {
-    fn help<'w>() -> HelpWidget<'w> {
+impl<'w> HasHelp for ReadingWidget<'w> {
+    fn help<'h>() -> super::help::HelpWidget<'h> {
         HelpWidget::new(vec![
-            (KeyCombo::new().with_code(KeyCode::Esc), "Back"),
+            (KeyCombo::new().with_code(KeyCode::Tab), "Next"),
             (
                 KeyCombo::new()
-                    .with_code(KeyCode::Down)
-                    .with_code(KeyCode::Up),
-                "Scroll",
+                    .with_code(KeyCode::Tab)
+                    .with_modifier(KeyModifiers::SHIFT),
+                "Prev",
             ),
+            (KeyCombo::new().with_code(KeyCode::Esc), "Cancel"),
         ])
     }
 }
 
-impl ReadingWidget {
-    pub fn render_widget(&self, f: &mut Frame) {
+impl<'w> ReadingWidget<'w> {
+    pub fn handle_event(&mut self, event: Event) {
+        match event {
+            Event::Key(key_event) => self.handle_key_event(key_event),
+            _ => {}
+        }
+    }
+
+    fn handle_key_event(
+        &mut self,
+        event @ KeyEvent {
+            code, modifiers, ..
+        }: KeyEvent,
+    ) {
+        match (code, modifiers) {
+            (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
+                todo!("state.screen = Screen::Main");
+            }
+            (crossterm::event::KeyCode::Tab, _) => {
+                self.focused = (self.focused + 1) % 4;
+                self.update_focused();
+            }
+            (crossterm::event::KeyCode::BackTab, _) => {
+                self.focused = (self.focused + 3) % 4;
+                self.update_focused();
+            }
+            (crossterm::event::KeyCode::Esc, _) => todo!("state.screen = Screen::Main"),
+            (crossterm::event::KeyCode::Char(_), _)
+            | (crossterm::event::KeyCode::Backspace, _)
+            | (crossterm::event::KeyCode::Delete, _) => {
+                // Ignore editing inputs
+                // this could be placed in the underlying component too but
+                // the logic there would become more complicated, here is good enough
+            }
+            _ => {
+                match self.focused {
+                    0 => self.to.input(event),
+                    1 => self.cc.input(event),
+                    2 => self.bcc.input(event),
+                    3 => self.body.as_mut().input(event),
+                    _ => unreachable!(),
+                };
+            }
+        }
+    }
+
+    fn update_focused(&mut self) {
+        let parts: [&mut dyn FocusStyle; 4] =
+            [&mut self.to, &mut self.cc, &mut self.bcc, &mut self.body];
+        for (idx, focusable) in parts.into_iter().enumerate() {
+            if idx == self.focused {
+                focusable.focused();
+            } else {
+                focusable.unfocused();
+            }
+        }
+    }
+
+    pub fn render_reading(&self, f: &mut Frame) {
         let area = f.area();
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -62,37 +143,11 @@ impl ReadingWidget {
                 Constraint::Length(1),
             ])
             .split(area);
-        let fields = [
-            ("To", &self.from),
-            ("Cc", &self.cc.join(", ")),
-            ("Bcc", &self.bcc.join(", ")),
-        ];
-        for (i, (label, value)) in fields.iter().enumerate() {
-            let block = Block::default().borders(Borders::ALL).title(*label);
-            let para = Paragraph::new(value.as_str()).block(block);
-            f.render_widget(para, chunks[i]);
-        }
-        let body_block = Block::default().borders(Borders::ALL).title("Body");
-        let para = Paragraph::new(self.body.as_str())
-            .block(body_block)
-            .wrap(Wrap { trim: false })
-            .scroll((self.scroll, 0));
-        f.render_widget(para, chunks[3]);
-        f.render_widget(Self::help(), chunks[4]);
-    }
-}
 
-pub fn handle_reading(state: &mut ScreenState, event: Event) {
-    if let Event::Key(KeyEvent { code, .. }) = event {
-        match code {
-            crossterm::event::KeyCode::Esc => state.screen = Screen::Main,
-            crossterm::event::KeyCode::Down => state.reading.scroll += 1,
-            crossterm::event::KeyCode::Up => {
-                if state.reading.scroll > 0 {
-                    state.reading.scroll -= 1;
-                }
-            }
-            _ => {}
-        }
+        f.render_widget(&self.to, chunks[0]);
+        f.render_widget(&self.cc, chunks[1]);
+        f.render_widget(&self.bcc, chunks[2]);
+        f.render_widget(&self.body, chunks[3]);
+        f.render_widget(Self::help(), chunks[4]);
     }
 }

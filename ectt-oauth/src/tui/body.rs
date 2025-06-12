@@ -22,6 +22,18 @@ impl<'w> BodyWidget<'w> {
             },
         }
     }
+
+    pub fn with_contents(contents: String) -> Self {
+        Self {
+            textarea: {
+                let mut textarea = TextArea::new(vec![contents]);
+                textarea.set_cursor_line_style(Style::default());
+                // textarea.set_placeholder_text("john.doe@kagi.com");
+                textarea.set_block(Block::default().borders(Borders::ALL).title("Body"));
+                textarea
+            },
+        }
+    }
 }
 
 impl<'w> Widget for &BodyWidget<'w> {
