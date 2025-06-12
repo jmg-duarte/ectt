@@ -14,18 +14,7 @@ use crate::{
     },
     Action,
 };
-
-#[derive(Debug, Default)]
-pub struct ReadingState {
-    to: String,
-    cc: String,
-    bcc: String,
-    body: Vec<String>,
-}
-
 pub struct ReadingWidget<'w> {
-    state: ReadingState, // TODO: handle ctrl+s to send the email
-
     focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
 
     to: AddressWidget<'w>,
@@ -38,7 +27,6 @@ pub struct ReadingWidget<'w> {
 impl<'w> Default for ReadingWidget<'w> {
     fn default() -> Self {
         Self {
-            state: Default::default(),
             to: {
                 let mut widget = AddressWidget::with_contents("To", "jose@kagi.com".to_string());
                 // ensure its focused on the first render

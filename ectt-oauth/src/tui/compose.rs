@@ -15,17 +15,7 @@ use crate::{
     Action,
 };
 
-#[derive(Debug, Default)]
-pub struct ComposeState {
-    to: String,
-    cc: String,
-    bcc: String,
-    body: Vec<String>,
-}
-
 pub struct ComposeWidget<'w> {
-    state: ComposeState, // TODO: handle ctrl+s to send the email
-
     focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
 
     to: AddressWidget<'w>,
@@ -38,7 +28,6 @@ pub struct ComposeWidget<'w> {
 impl<'w> Default for ComposeWidget<'w> {
     fn default() -> Self {
         Self {
-            state: Default::default(),
             to: AddressWidget::new("To"),
             cc: AddressWidget::new("Cc"),
             bcc: AddressWidget::new("Bcc"),
