@@ -1,6 +1,6 @@
 use ratatui::{
     style::{Color, Style, Stylize},
-    widgets::{block::Title, Block, Borders, Widget},
+    widgets::{Block, Borders, Widget},
 };
 use tui_textarea::TextArea;
 

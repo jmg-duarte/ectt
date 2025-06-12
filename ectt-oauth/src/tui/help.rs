@@ -19,14 +19,14 @@ impl<'w> HelpWidget<'w> {
     }
 }
 
-impl<'w> Widget for HelpWidget<'w> {
+impl<'w> Widget for &HelpWidget<'w> {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
         let text = self
             .actions
-            .into_iter()
+            .iter()
             .map(|(combo, action)| format!("{combo}: {action}"))
             .join(" | ");
 

@@ -1,24 +1,18 @@
-use std::{default, hint::unreachable_unchecked};
-
-use color_eyre::owo_colors::OwoColorize;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style, Stylize},
-    widgets::{block::Title, Block, Borders, Paragraph, Widget},
-    Frame,
+    widgets::Widget,
 };
-use tui_textarea::TextArea;
 
 use crate::{
     tui::{
-        address::{self, AddressWidget},
+        address::AddressWidget,
         body::BodyWidget,
         combo::KeyCombo,
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
     },
-    Action, Screen, ScreenState,
+    Action,
 };
 
 #[derive(Debug, Default)]
@@ -38,6 +32,7 @@ pub struct ReadingWidget<'w> {
     cc: AddressWidget<'w>,
     bcc: AddressWidget<'w>,
     body: BodyWidget<'w>,
+    help: HelpWidget<'w>,
 }
 
 impl<'w> Default for ReadingWidget<'w> {
@@ -53,6 +48,7 @@ impl<'w> Default for ReadingWidget<'w> {
             cc: AddressWidget::with_contents("Cc", "jose@kagi.com".to_string()),
             bcc: AddressWidget::with_contents("Bcc", "jose@kagi.com".to_string()),
             body: BodyWidget::new(),
+            help: Self::help(),
             focused: Default::default(),
         }
     }
@@ -88,7 +84,7 @@ impl<'w> ReadingWidget<'w> {
         }: KeyEvent,
     ) -> Action {
         match (code, modifiers) {
-            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(Screen::Main),
+            (crossterm::event::KeyCode::Esc, _) => Action::Back,
             (crossterm::event::KeyCode::Tab, _) => {
                 self.focused = (self.focused + 1) % 4;
                 self.update_focused();
@@ -131,9 +127,13 @@ impl<'w> ReadingWidget<'w> {
             }
         }
     }
+}
 
-    pub fn render_reading(&self, f: &mut Frame) {
-        let area = f.area();
+impl<'w> Widget for &ReadingWidget<'w> {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
+    where
+        Self: Sized,
+    {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -145,10 +145,10 @@ impl<'w> ReadingWidget<'w> {
             ])
             .split(area);
 
-        f.render_widget(&self.to, chunks[0]);
-        f.render_widget(&self.cc, chunks[1]);
-        f.render_widget(&self.bcc, chunks[2]);
-        f.render_widget(&self.body, chunks[3]);
-        f.render_widget(Self::help(), chunks[4]);
+        self.to.render(chunks[0], buf);
+        self.cc.render(chunks[1], buf);
+        self.bcc.render(chunks[2], buf);
+        self.body.render(chunks[3], buf);
+        self.help.render(chunks[4], buf);
     }
 }

@@ -45,25 +45,23 @@ fn main() -> Result<(), Error> {
     }
 }
 
-enum Screen {
-    Login,   // Unused for now
-    Main,    // The main table screen
-    Compose, // Compose an email
-    Reading, // Read an email
+enum Screen<'w> {
+    Login,                      // Unused for now
+    Main,                       // The main table screen
+    Compose(ComposeWidget<'w>), // Compose an email
+    Reading(ReadingWidget<'w>), // Read an email
 }
 
-enum Action {
+pub enum Action {
     Quit,
     Tick,
-    GoTo(Screen),
+    Back,
 }
 
 struct ScreenState<'w> {
-    screen: Screen,
+    screen: Screen<'w>,
     table_state: TableState,
     items: Vec<[&'static str; 3]>,
-    compose: ComposeWidget<'w>,
-    reading: ReadingWidget<'w>,
     login_url: String,
 }
 
@@ -77,8 +75,6 @@ impl<'w> Default for ScreenState<'w> {
                 ["2024-06-02", "Bob", "Second Post"],
                 ["2024-06-03", "Carol", "Third Post"],
             ],
-            compose: ComposeWidget::default(),
-            reading: ReadingWidget::default(),
             login_url: "https://example.com/login".to_string(),
         }
     }
@@ -154,9 +150,12 @@ fn handle_main(state: &mut ScreenState, event: Event) {
                 todo!("send signal to stop the run loop")
             }
             (crossterm::event::KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                state.screen = Screen::Compose
+                state.screen = Screen::Compose(Default::default())
             }
-            (crossterm::event::KeyCode::Enter, _) => state.screen = Screen::Reading,
+            (crossterm::event::KeyCode::Enter, _) => {
+                // TODO: read the email from the "provider"
+                state.screen = Screen::Reading(Default::default())
+            }
             (crossterm::event::KeyCode::Down, _) => {
                 let i = match state.table_state.selected() {
                     Some(i) => {
@@ -193,11 +192,11 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
     state.table_state.select(Some(0));
 
     loop {
-        terminal.draw(|f| match state.screen {
+        terminal.draw(|f| match &state.screen {
             Screen::Login => state.render_login(f),
             Screen::Main => state.render_main(f),
-            Screen::Compose => state.compose.render_compose(f),
-            Screen::Reading => state.reading.render_reading(f),
+            Screen::Compose(widget) => f.render_widget(widget, f.area()),
+            Screen::Reading(widget) => f.render_widget(widget, f.area()),
         })?;
 
         if event::poll(std::time::Duration::from_millis(200))? {
@@ -206,15 +205,15 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             match state.screen {
                 Screen::Login => handle_login(&mut state, event),
                 Screen::Main => handle_main(&mut state, event),
-                Screen::Compose => match state.compose.handle_event(event) {
+                Screen::Compose(ref mut widget) => match widget.handle_event(event) {
                     Action::Quit => break Ok(()),
                     Action::Tick => continue,
-                    Action::GoTo(screen) => state.screen = screen,
+                    Action::Back => state.screen = Screen::Main,
                 },
-                Screen::Reading => match state.reading.handle_event(event) {
+                Screen::Reading(ref mut widget) => match widget.handle_event(event) {
                     Action::Quit => break Ok(()),
                     Action::Tick => continue,
-                    Action::GoTo(screen) => state.screen = screen,
+                    Action::Back => state.screen = Screen::Main,
                 },
             }
         }
