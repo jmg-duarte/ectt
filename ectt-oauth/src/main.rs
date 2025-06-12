@@ -52,16 +52,16 @@ enum Screen {
     Reading, // Read an email
 }
 
-struct ScreenState {
+struct ScreenState<'w> {
     screen: Screen,
     table_state: TableState,
     items: Vec<[&'static str; 3]>,
-    compose: ComposeWidget,
+    compose: ComposeWidget<'w>,
     reading: ReadingWidget,
     login_url: String,
 }
 
-impl Default for ScreenState {
+impl<'w> Default for ScreenState<'w> {
     fn default() -> Self {
         Self {
             screen: Screen::Login,
@@ -78,7 +78,7 @@ impl Default for ScreenState {
     }
 }
 
-impl ScreenState {
+impl<'w> ScreenState<'w> {
     fn render_login(&self, f: &mut Frame) {
         let area = f.area();
         let chunks = Layout::default()
@@ -200,7 +200,7 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             match state.screen {
                 Screen::Login => handle_login(&mut state, event),
                 Screen::Main => handle_main(&mut state, event),
-                Screen::Compose => handle_compose(&mut state, event),
+                Screen::Compose => state.compose.handle_event(event),
                 Screen::Reading => handle_reading(&mut state, event),
             }
         }

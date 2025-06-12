@@ -1,43 +1,59 @@
+use std::{default, hint::unreachable_unchecked};
+
+use color_eyre::owo_colors::OwoColorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    style::{Color, Style, Stylize},
+    widgets::{block::Title, Block, Borders, Paragraph, Widget},
     Frame,
 };
+use tui_textarea::TextArea;
 
 use crate::{
     tui::{
+        address::{self, AddressWidget},
+        body::BodyWidget,
         combo::KeyCombo,
+        focus::FocusStyle,
         help::{HasHelp, HelpWidget},
     },
     Screen, ScreenState,
 };
 
-pub struct ComposeWidget {
+#[derive(Debug, Default)]
+pub struct ComposeState {
     to: String,
     cc: String,
     bcc: String,
-    body: String,
-    body_cursor: (usize, usize), // (line, col)
-    focused: usize,              // 0: to, 1: cc, 2: bcc, 3: body
+    body: Vec<String>,
 }
 
-impl Default for ComposeWidget {
+pub struct ComposeWidget<'w> {
+    state: ComposeState,
+
+    to: AddressWidget<'w>,
+    cc: AddressWidget<'w>,
+    bcc: AddressWidget<'w>,
+    body: BodyWidget<'w>,
+    focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
+}
+
+impl<'w> Default for ComposeWidget<'w> {
     fn default() -> Self {
         Self {
-            to: Default::default(),
-            cc: Default::default(),
-            bcc: Default::default(),
-            body: Default::default(),
-            body_cursor: Default::default(),
+            state: Default::default(),
+            to: AddressWidget::new("To"),
+            cc: AddressWidget::new("Cc"),
+            bcc: AddressWidget::new("Bcc"),
+            body: BodyWidget::new(),
             focused: Default::default(),
         }
     }
 }
 
-impl HasHelp for ComposeWidget {
-    fn help<'w>() -> super::help::HelpWidget<'w> {
+impl<'w> HasHelp for ComposeWidget<'w> {
+    fn help<'h>() -> super::help::HelpWidget<'h> {
         HelpWidget::new(vec![
             (
                 KeyCombo::new()
@@ -57,7 +73,57 @@ impl HasHelp for ComposeWidget {
     }
 }
 
-impl ComposeWidget {
+impl<'w> ComposeWidget<'w> {
+    pub fn handle_event(&mut self, event: Event) {
+        match event {
+            Event::Key(key_event) => self.handle_key_event(key_event),
+            _ => {}
+        }
+    }
+
+    fn handle_key_event(
+        &mut self,
+        event @ KeyEvent {
+            code, modifiers, ..
+        }: KeyEvent,
+    ) {
+        match (code, modifiers) {
+            (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
+                todo!("state.screen = Screen::Main");
+            }
+            (crossterm::event::KeyCode::Tab, _) => {
+                self.focused = (self.focused + 1) % 4;
+                self.update_focused();
+            }
+            (crossterm::event::KeyCode::BackTab, _) => {
+                self.focused = (self.focused + 3) % 4;
+                self.update_focused();
+            }
+            (crossterm::event::KeyCode::Esc, _) => todo!("state.screen = Screen::Main"),
+            _ => {
+                match self.focused {
+                    0 => self.to.as_mut().input(event),
+                    1 => self.cc.as_mut().input(event),
+                    2 => self.bcc.as_mut().input(event),
+                    3 => self.body.as_mut().input(event),
+                    _ => unreachable!(),
+                };
+            }
+        }
+    }
+
+    fn update_focused(&mut self) {
+        let parts: [&mut dyn FocusStyle; 4] =
+            [&mut self.to, &mut self.cc, &mut self.bcc, &mut self.body];
+        for (idx, focusable) in parts.into_iter().enumerate() {
+            if idx == self.focused {
+                focusable.focused();
+            } else {
+                focusable.unfocused();
+            }
+        }
+    }
+
     pub fn render_compose(&self, f: &mut Frame) {
         let area = f.area();
         let chunks = Layout::default()
@@ -70,219 +136,11 @@ impl ComposeWidget {
                 Constraint::Length(1),
             ])
             .split(area);
-        let fields = [
-            ("To", &self.to, self.focused == 0),
-            ("Cc", &self.cc, self.focused == 1),
-            ("Bcc", &self.bcc, self.focused == 2),
-        ];
-        for (i, (label, value, focused)) in fields.iter().enumerate() {
-            let block = Block::default().borders(Borders::ALL).title(*label);
-            let style = if *focused {
-                Style::default().fg(Color::Yellow)
-            } else {
-                Style::default()
-            };
-            let para = Paragraph::new(value.as_str()).block(block).style(style);
-            f.render_widget(para, chunks[i]);
-        }
-        // Body field with cursor
-        let body_block = Block::default().borders(Borders::ALL).title("Body");
-        let body_style = if self.focused == 3 {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default()
-        };
-        let mut lines: Vec<String> = self.body.lines().map(|l| l.to_string()).collect();
-        if lines.is_empty() {
-            lines.push(String::new());
-        }
-        let (cur_line, cur_col) = self.body_cursor;
-        if self.focused == 3 {
-            if cur_line < lines.len() {
-                let l = &mut lines[cur_line];
-                if cur_col <= l.len() {
-                    l.insert(cur_col, '▏'); // Unicode thin cursor
-                } else {
-                    l.push('▏');
-                }
-            } else {
-                lines.push("▏".to_string());
-            }
-        }
-        let para = Paragraph::new(lines.join("\n"))
-            .block(body_block)
-            .style(body_style);
-        f.render_widget(para, chunks[3]);
-        f.render_widget(Self::help(), chunks[4]);
-    }
-}
 
-pub fn handle_compose(state: &mut ScreenState, event: Event) {
-    if let Event::Key(KeyEvent {
-        code, modifiers, ..
-    }) = event
-    {
-        match (code, modifiers) {
-            (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
-                state.screen = Screen::Main
-            }
-            (crossterm::event::KeyCode::Tab, _) => {
-                state.compose.focused = (state.compose.focused + 1) % 4
-            }
-            (crossterm::event::KeyCode::BackTab, _) => {
-                state.compose.focused = (state.compose.focused + 3) % 4
-            }
-            (crossterm::event::KeyCode::Esc, _) => state.screen = Screen::Main,
-            (crossterm::event::KeyCode::Char(c), _) => {
-                match state.compose.focused {
-                    0 => state.compose.to.push(c),
-                    1 => state.compose.cc.push(c),
-                    2 => state.compose.bcc.push(c),
-                    3 => {
-                        // Insert char at cursor
-                        let (line, col) = state.compose.body_cursor;
-                        let mut lines: Vec<String> =
-                            state.compose.body.lines().map(|l| l.to_string()).collect();
-                        if lines.is_empty() {
-                            lines.push(String::new());
-                        }
-                        if line >= lines.len() {
-                            lines.resize(line + 1, String::new());
-                        }
-                        lines[line].insert(col, c);
-                        state.compose.body = lines.join("\n");
-                        state.compose.body_cursor.1 += 1;
-                    }
-                    _ => {}
-                }
-            }
-            (crossterm::event::KeyCode::Enter, _) => {
-                if state.compose.focused == 3 {
-                    let (line, col) = state.compose.body_cursor;
-                    let mut lines: Vec<String> =
-                        state.compose.body.lines().map(|l| l.to_string()).collect();
-                    if lines.is_empty() {
-                        lines.push(String::new());
-                    }
-                    // If cursor is at a new line at the end, add an empty line
-                    if line >= lines.len() {
-                        lines.push(String::new());
-                    }
-                    // Defensive: ensure line is in bounds
-                    if line < lines.len() {
-                        let rest = lines[line][col..].to_string();
-                        lines[line].truncate(col);
-                        lines.insert(line + 1, rest);
-                        state.compose.body = lines.join("\n");
-                        state.compose.body_cursor = (line + 1, 0);
-                    } else {
-                        // If line is still out of bounds, just add a new empty line
-                        lines.push(String::new());
-                        state.compose.body = lines.join("\n");
-                        state.compose.body_cursor = (lines.len() - 1, 0);
-                    }
-                }
-            }
-            (crossterm::event::KeyCode::Backspace, _) => {
-                match state.compose.focused {
-                    0 => {
-                        state.compose.to.pop();
-                    }
-                    1 => {
-                        state.compose.cc.pop();
-                    }
-                    2 => {
-                        state.compose.bcc.pop();
-                    }
-                    3 => {
-                        let (line, col) = state.compose.body_cursor;
-                        let mut lines: Vec<String> =
-                            state.compose.body.lines().map(|l| l.to_string()).collect();
-                        if lines.is_empty() {
-                            lines.push(String::new());
-                        }
-                        if line < lines.len() {
-                            if col > 0 && col <= lines[line].len() {
-                                lines[line].remove(col - 1);
-                                state.compose.body_cursor.1 -= 1;
-                            } else if col == 0 && line > 0 {
-                                // Merge with previous line
-                                let prev_len = lines[line - 1].len();
-                                let cur = lines.remove(line);
-                                lines[line - 1].push_str(&cur);
-                                state.compose.body_cursor = (line - 1, prev_len);
-                            }
-                        }
-                        // Clamp cursor to valid position
-                        let (mut line, mut col) = state.compose.body_cursor;
-                        if line >= lines.len() {
-                            line = lines.len().saturating_sub(1);
-                        }
-                        let line_len = lines.get(line).map(|l| l.len()).unwrap_or(0);
-                        if col > line_len {
-                            col = line_len;
-                        }
-                        state.compose.body_cursor = (line, col);
-                        state.compose.body = lines.join("\n");
-                    }
-                    _ => {}
-                }
-            }
-            (crossterm::event::KeyCode::Left, _) => {
-                if state.compose.focused == 3 {
-                    let (line, col) = state.compose.body_cursor;
-                    if col > 0 {
-                        state.compose.body_cursor.1 -= 1;
-                    } else if line > 0 {
-                        let prev_len = state
-                            .compose
-                            .body
-                            .lines()
-                            .nth(line - 1)
-                            .map(|l| l.len())
-                            .unwrap_or(0);
-                        state.compose.body_cursor = (line - 1, prev_len);
-                    }
-                }
-            }
-            (crossterm::event::KeyCode::Right, _) => {
-                if state.compose.focused == 3 {
-                    let (line, col) = state.compose.body_cursor;
-                    let lines: Vec<&str> = state.compose.body.lines().collect();
-                    let line_len = lines.get(line).map(|l| l.len()).unwrap_or(0);
-                    if col < line_len {
-                        state.compose.body_cursor.1 += 1;
-                    } else if line + 1 < lines.len() {
-                        state.compose.body_cursor = (line + 1, 0);
-                    }
-                }
-            }
-            (crossterm::event::KeyCode::Up, _) => {
-                if state.compose.focused == 3 {
-                    let (line, col) = state.compose.body_cursor;
-                    if line > 0 {
-                        let prev_len = state
-                            .compose
-                            .body
-                            .lines()
-                            .nth(line - 1)
-                            .map(|l| l.len())
-                            .unwrap_or(0);
-                        state.compose.body_cursor = (line - 1, col.min(prev_len));
-                    }
-                }
-            }
-            (crossterm::event::KeyCode::Down, _) => {
-                if state.compose.focused == 3 {
-                    let (line, col) = state.compose.body_cursor;
-                    let lines: Vec<&str> = state.compose.body.lines().collect();
-                    if line + 1 < lines.len() {
-                        let next_len = lines[line + 1].len();
-                        state.compose.body_cursor = (line + 1, col.min(next_len));
-                    }
-                }
-            }
-            _ => {}
-        }
+        f.render_widget(&self.to, chunks[0]);
+        f.render_widget(&self.cc, chunks[1]);
+        f.render_widget(&self.bcc, chunks[2]);
+        f.render_widget(&self.body, chunks[3]);
+        f.render_widget(Self::help(), chunks[4]);
     }
 }
