@@ -11,6 +11,7 @@ use dirs::config_dir;
 use ratatui::{DefaultTerminal, Frame};
 
 use crate::tui::compose::ComposeWidget;
+use crate::tui::login::LoginWidget;
 use crate::tui::reading::ReadingWidget;
 use crate::{cli::App, oauth::execute_authentication_flow};
 use crossterm::event::KeyModifiers;
@@ -71,7 +72,7 @@ fn main() -> Result<(), Error> {
 }
 
 enum Screen<'w> {
-    Login,                      // Unused for now
+    Login(LoginWidget<'w>),     // Unused for now
     Main,                       // The main table screen
     Compose(ComposeWidget<'w>), // Compose an email
     Reading(ReadingWidget<'w>), // Read an email
@@ -87,42 +88,23 @@ struct ScreenState<'w> {
     screen: Screen<'w>,
     table_state: TableState,
     items: Vec<[&'static str; 3]>,
-    login_url: String,
 }
 
 impl<'w> Default for ScreenState<'w> {
     fn default() -> Self {
         Self {
-            screen: Screen::Login,
+            screen: Screen::Login(LoginWidget::new("https://example.com/login".to_string())),
             table_state: TableState::default(),
             items: vec![
                 ["2024-06-01", "Alice", "First Post"],
                 ["2024-06-02", "Bob", "Second Post"],
                 ["2024-06-03", "Carol", "Third Post"],
             ],
-            login_url: "https://example.com/login".to_string(),
         }
     }
 }
 
 impl<'w> ScreenState<'w> {
-    fn render_login(&self, f: &mut Frame) {
-        let area = f.area();
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(1), Constraint::Length(1)])
-            .split(area);
-        let block = Block::default().borders(Borders::ALL).title("Login");
-        let text = format!("Open URL: {}", self.login_url);
-        let paragraph = Paragraph::new(text)
-            .block(block)
-            .alignment(ratatui::layout::Alignment::Center);
-        f.render_widget(paragraph, chunks[0]);
-        let help = Paragraph::new("[Any key] Continue | [Ctrl+W] Quit")
-            .style(Style::default().fg(Color::DarkGray));
-        f.render_widget(help, chunks[1]);
-    }
-
     fn render_main(&mut self, f: &mut Frame) {
         let area = f.area();
         let chunks = Layout::default()
@@ -218,7 +200,7 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
 
     loop {
         terminal.draw(|f| match &state.screen {
-            Screen::Login => state.render_login(f),
+            Screen::Login(widget) => f.render_widget(widget, f.area()),
             Screen::Main => state.render_main(f),
             Screen::Compose(widget) => f.render_widget(widget, f.area()),
             Screen::Reading(widget) => f.render_widget(widget, f.area()),
@@ -228,7 +210,11 @@ fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
             let event = event::read()?;
 
             match state.screen {
-                Screen::Login => handle_login(&mut state, event),
+                Screen::Login(ref mut widget) => match widget.handle_event(event) {
+                    Action::Quit => break Ok(()),
+                    Action::Tick => continue,
+                    Action::Back => state.screen = Screen::Main,
+                },
                 Screen::Main => handle_main(&mut state, event),
                 Screen::Compose(ref mut widget) => match widget.handle_event(event) {
                     Action::Quit => break Ok(()),
