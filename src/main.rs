@@ -8,9 +8,10 @@ use std::fs::OpenOptions;
 use clap::Parser;
 use crossterm::event::{self, Event, KeyEvent};
 use dirs::config_dir;
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{widgets, DefaultTerminal, Frame};
 
 use crate::tui::compose::ComposeWidget;
+use crate::tui::inbox::InboxWidget;
 use crate::tui::login::LoginWidget;
 use crate::tui::reading::ReadingWidget;
 use crate::{cli::App, oauth::execute_authentication_flow};
@@ -72,22 +73,22 @@ fn main() -> Result<(), Error> {
 }
 
 enum Screen<'w> {
-    Login(LoginWidget<'w>),     // Unused for now
-    Main,                       // The main table screen
-    Compose(ComposeWidget<'w>), // Compose an email
-    Reading(ReadingWidget<'w>), // Read an email
+    Login(LoginWidget<'w>),
+    Inbox(InboxWidget<'w>),
+    Compose(ComposeWidget<'w>),
+    Reading(ReadingWidget<'w>),
 }
 
-pub enum Action {
+pub enum Action<'w> {
     Quit,
     Tick,
     Back,
+    GoTo(Screen<'w>),
 }
 
 struct ScreenState<'w> {
     screen: Screen<'w>,
     table_state: TableState,
-    items: Vec<[&'static str; 3]>,
 }
 
 impl<'w> Default for ScreenState<'w> {
@@ -95,138 +96,39 @@ impl<'w> Default for ScreenState<'w> {
         Self {
             screen: Screen::Login(LoginWidget::new("https://example.com/login".to_string())),
             table_state: TableState::default(),
-            items: vec![
-                ["2024-06-01", "Alice", "First Post"],
-                ["2024-06-02", "Bob", "Second Post"],
-                ["2024-06-03", "Carol", "Third Post"],
-            ],
         }
     }
 }
-
-impl<'w> ScreenState<'w> {
-    fn render_main(&mut self, f: &mut Frame) {
-        let area = f.area();
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(1), Constraint::Length(1)])
-            .split(area);
-        let header = Row::new(vec![
-            Cell::from("Date"),
-            Cell::from("Author"),
-            Cell::from("Title"),
-        ])
-        .style(Style::default().add_modifier(Modifier::BOLD));
-        let rows = self
-            .items
-            .iter()
-            .map(|item| Row::new(item.iter().map(|c| Cell::from(*c))));
-        let table = Table::new(
-            rows,
-            &[
-                Constraint::Length(12),
-                Constraint::Length(10),
-                Constraint::Min(20),
-            ],
-        )
-        .header(header)
-        .block(Block::default().borders(Borders::ALL).title("Posts"))
-        .row_highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
-        .highlight_symbol(">> ");
-        f.render_stateful_widget(table, chunks[0], &mut self.table_state);
-        let help =
-            Paragraph::new("[Ctrl+W] Quit | [Ctrl+N] Compose | [Enter] Read | [Up/Down] Move")
-                .style(Style::default().fg(Color::DarkGray));
-        f.render_widget(help, chunks[1]);
-    }
-}
-
-fn handle_login(state: &mut ScreenState, event: Event) {
-    if let Event::Key(_) = event {
-        state.screen = Screen::Main
-    }
-}
-
-fn handle_main(state: &mut ScreenState, event: Event) {
-    if let Event::Key(KeyEvent {
-        code, modifiers, ..
-    }) = event
-    {
-        match (code, modifiers) {
-            (crossterm::event::KeyCode::Char('w'), KeyModifiers::CONTROL) => {
-                todo!("send signal to stop the run loop")
-            }
-            (crossterm::event::KeyCode::Char('n'), KeyModifiers::CONTROL) => {
-                state.screen = Screen::Compose(Default::default())
-            }
-            (crossterm::event::KeyCode::Enter, _) => {
-                // TODO: read the email from the "provider"
-                state.screen = Screen::Reading(Default::default())
-            }
-            (crossterm::event::KeyCode::Down, _) => {
-                let i = match state.table_state.selected() {
-                    Some(i) => {
-                        if i >= state.items.len() - 1 {
-                            0
-                        } else {
-                            i + 1
-                        }
-                    }
-                    None => 0,
-                };
-                state.table_state.select(Some(i));
-            }
-            (crossterm::event::KeyCode::Up, _) => {
-                let i = match state.table_state.selected() {
-                    Some(i) => {
-                        if i == 0 {
-                            state.items.len() - 1
-                        } else {
-                            i - 1
-                        }
-                    }
-                    None => 0,
-                };
-                state.table_state.select(Some(i));
-            }
-            _ => {}
-        }
-    }
-}
-
 fn run(mut terminal: DefaultTerminal) -> std::io::Result<()> {
     let mut state = ScreenState::default();
     state.table_state.select(Some(0));
 
     loop {
-        terminal.draw(|f| match &state.screen {
-            Screen::Login(widget) => f.render_widget(widget, f.area()),
-            Screen::Main => state.render_main(f),
-            Screen::Compose(widget) => f.render_widget(widget, f.area()),
-            Screen::Reading(widget) => f.render_widget(widget, f.area()),
+        terminal.draw(|f| match &mut state.screen {
+            Screen::Login(widget) => f.render_widget(&*widget, f.area()),
+            Screen::Inbox(widget) => {
+                f.render_stateful_widget(&*widget, f.area(), &mut state.table_state)
+            }
+            Screen::Compose(widget) => f.render_widget(&*widget, f.area()),
+            Screen::Reading(widget) => f.render_widget(&*widget, f.area()),
         })?;
 
         if event::poll(std::time::Duration::from_millis(200))? {
             let event = event::read()?;
 
-            match state.screen {
-                Screen::Login(ref mut widget) => match widget.handle_event(event) {
-                    Action::Quit => break Ok(()),
-                    Action::Tick => continue,
-                    Action::Back => state.screen = Screen::Main,
-                },
-                Screen::Main => handle_main(&mut state, event),
-                Screen::Compose(ref mut widget) => match widget.handle_event(event) {
-                    Action::Quit => break Ok(()),
-                    Action::Tick => continue,
-                    Action::Back => state.screen = Screen::Main,
-                },
-                Screen::Reading(ref mut widget) => match widget.handle_event(event) {
-                    Action::Quit => break Ok(()),
-                    Action::Tick => continue,
-                    Action::Back => state.screen = Screen::Main,
-                },
-            }
+            let action = match &mut state.screen {
+                Screen::Login(widget) => widget.handle_event(event),
+                Screen::Inbox(widget) => widget.handle_event(event, &mut state.table_state),
+                Screen::Compose(widget) => widget.handle_event(event),
+                Screen::Reading(widget) => widget.handle_event(event),
+            };
+
+            match action {
+                Action::Quit => break Ok(()),
+                Action::Tick => continue,
+                Action::Back => state.screen = Screen::Inbox(InboxWidget::new()),
+                Action::GoTo(_) => state.screen = Screen::Inbox(InboxWidget::new()),
+            };
         }
     }
 }
