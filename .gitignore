@@ -1,3 +1,5 @@
 /target
 
 *.creds.json
+config.json
+ectt.log

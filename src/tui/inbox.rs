@@ -8,12 +8,27 @@ use ratatui::{
 };
 
 use crate::{
+    imap::ParsedEmail,
     tui::{
         combo::KeyCombo,
         help::{HasHelp, HelpWidget},
     },
     Action, Page,
 };
+
+pub struct InboxState {
+    pub inbox: Vec<ParsedEmail>,
+    pub table: TableState,
+}
+
+impl InboxState {
+    pub fn new() -> Self {
+        Self {
+            inbox: vec![],
+            table: TableState::default().with_selected(0),
+        }
+    }
+}
 
 pub struct InboxWidget<'w> {
     table: Table<'w>,
@@ -32,7 +47,7 @@ impl<'w> InboxWidget<'w> {
         );
         let widths = &[
             Constraint::Length(12),
-            Constraint::Length(10),
+            Constraint::Fill(1),
             Constraint::Min(20),
         ];
         let table = Table::new(empty::<Row>(), widths)
@@ -47,11 +62,7 @@ impl<'w> InboxWidget<'w> {
         }
     }
 
-    pub fn handle_event(
-        &mut self,
-        event: Event,
-        state: &mut <&InboxWidget<'_> as StatefulWidget>::State,
-    ) -> Action {
+    pub fn handle_event(&mut self, event: Event, state: &mut InboxState) -> Action {
         match event {
             Event::Key(key_event) => self.handle_key_event(key_event, state),
             _ => Action::Tick,
@@ -63,7 +74,7 @@ impl<'w> InboxWidget<'w> {
         KeyEvent {
             code, modifiers, ..
         }: KeyEvent,
-        state: &mut <&InboxWidget<'_> as StatefulWidget>::State,
+        state: &mut InboxState,
     ) -> Action {
         match (code, modifiers) {
             (crossterm::event::KeyCode::Char('w'), KeyModifiers::CONTROL) => Action::Quit,
@@ -75,11 +86,11 @@ impl<'w> InboxWidget<'w> {
                 Action::GoTo(Page::Reading)
             }
             (crossterm::event::KeyCode::Down, _) => {
-                state.select_next();
+                state.table.select_next();
                 Action::Tick
             }
             (crossterm::event::KeyCode::Up, _) => {
-                state.select_previous();
+                state.table.select_previous();
                 Action::Tick
             }
             _ => Action::Tick,
@@ -107,8 +118,8 @@ impl<'w> HasHelp for InboxWidget<'w> {
     }
 }
 
-impl StatefulWidget for &InboxWidget<'_> {
-    type State = TableState;
+impl StatefulWidget for &mut InboxWidget<'_> {
+    type State = InboxState;
 
     fn render(
         self,
@@ -121,7 +132,17 @@ impl StatefulWidget for &InboxWidget<'_> {
             .constraints([Constraint::Min(1), Constraint::Length(1)])
             .split(area);
 
-        StatefulWidget::render(&self.table, chunks[0], buf, state);
+        let table = std::mem::take(&mut self.table);
+        let table = table.rows(state.inbox.iter().map(|parsed| {
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from(parsed.from.clone()),
+                Cell::from(parsed.subject.clone()),
+            ])
+        }));
+        let _ = std::mem::replace(&mut self.table, table);
+
+        StatefulWidget::render(&self.table, chunks[0], buf, &mut state.table);
         Widget::render(&self.help, chunks[1], buf);
     }
 }

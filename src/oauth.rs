@@ -9,7 +9,7 @@ use oauth2::{
     basic::BasicClient,
     reqwest::{self},
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet, EndpointSet,
-    PkceCodeChallenge, RedirectUrl, Scope, TokenUrl,
+    PkceCodeChallenge, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::Deserialize;
 use tokio::{io::AsyncWriteExt, net::TcpListener, sync::mpsc};
@@ -134,7 +134,17 @@ async fn get_authorization(
         .await
         .unwrap(); // TODO
 
-    println!("{:?}", token_result);
+    println!(
+        "token: {}",
+        token_result.access_token().clone().into_secret()
+    );
+    println!(
+        "refresh: {:?}",
+        token_result
+            .refresh_token()
+            .cloned()
+            .map(|t| t.into_secret())
+    );
 
     state.cancellation_token.cancel();
 

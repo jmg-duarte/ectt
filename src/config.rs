@@ -1,0 +1,222 @@
+use std::{
+    fs::OpenOptions,
+    path::{Path, PathBuf},
+};
+
+use oauth2::{AccessToken, AuthUrl, ClientId, ClientSecret, RefreshToken, TokenUrl};
+
+pub fn get_config_path<P>(path: Option<P>) -> Result<PathBuf, crate::Error>
+where
+    P: AsRef<Path>,
+{
+    if let Some(path) = path {
+        return Ok(path.as_ref().to_path_buf());
+    };
+
+    if let Some(dir) = dirs::config_dir() {
+        let config_file = dir.join("config.json");
+        if config_file.exists() {
+            return Ok(config_file);
+        }
+        tracing::warn!("Missing configuration file at: {}", config_file.display());
+    }
+
+    let config_file = std::env::current_dir()?.join("config.json");
+    if config_file.exists() {
+        return Ok(config_file);
+    }
+
+    tracing::error!(
+        "Failed to find a configuration file at the fallback path: {}",
+        config_file.display()
+    );
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "No such file or directory",
+    ))?
+}
+
+pub fn load_config<P>(path: P) -> Result<ReadBackend, crate::Error>
+where
+    P: AsRef<Path>,
+{
+    let file = OpenOptions::new().read(true).open(path)?;
+    Ok(serde_json::from_reader(file)?)
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
+pub enum ReadBackend {
+    Imap(ImapConfig),
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ImapConfig {
+    pub host: String,
+    pub port: u16,
+    pub login: String,
+    pub auth: Auth,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
+pub enum Auth {
+    Password(PasswordConfig),
+    OAuth(OAuthConfig),
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct PasswordConfig {
+    pub raw: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct OAuthConfig {
+    pub client_id: ClientId,
+    pub client_secret: ClientSecret,
+    pub access_token: AccessToken,
+    pub refresh_token: RefreshToken,
+    #[serde(alias = "auth_uri")]
+    pub auth_url: AuthUrl,
+    #[serde(alias = "token_uri")]
+    pub token_url: TokenUrl,
+}
+
+#[cfg(test)]
+mod test {
+    use oauth2::{AccessToken, AuthUrl, ClientId, ClientSecret, RefreshToken, TokenUrl};
+    use serde_json::json;
+
+    use crate::config::{Auth, ImapConfig, OAuthConfig, PasswordConfig, ReadBackend};
+
+    /// Compilation will fail if for some reason the types stop implementing serde::Deserialize
+    #[test]
+    fn ensure_deserialize() {
+        fn impls_deserialize<'de, T>()
+        where
+            T: serde::Deserialize<'de>,
+        {
+        }
+        impls_deserialize::<ReadBackend>();
+        impls_deserialize::<Auth>();
+    }
+
+    #[test]
+    fn ensure_imap_password_format() {
+        let json = json!({
+            "type": "imap",
+            "host": "imap.example.com",
+            "port": 993,
+            "login": "jose@kagi.com",
+            "auth": {
+                "type": "password",
+                "raw": "super-secret"
+            }
+        });
+        let ReadBackend::Imap(ImapConfig {
+            host,
+            port,
+            login,
+            auth,
+        }) = serde_json::from_value(json).unwrap();
+
+        assert_eq!(host, "imap.example.com".to_string());
+        assert_eq!(port, 993);
+        assert_eq!(login, "jose@kagi.com");
+        // Defer the auth to the other tests
+        assert!(matches!(auth, Auth::Password { .. }));
+    }
+
+    #[test]
+    fn ensure_imap_oath_format() {
+        let json = json!({
+            "type": "imap",
+            "host": "imap.example.com",
+            "port": 993,
+            "login": "jose@kagi.com",
+            "auth": {
+                "type": "oauth",
+                "client_id": "client-id",
+                "client_secret": "client-secret",
+                "auth_url": "https://localhost",
+                "token_url": "https://localhost",
+                "access_token": "access-token",
+                "refresh_token": "refresh-token",
+            }
+        });
+        let ReadBackend::Imap(ImapConfig {
+            host,
+            port,
+            login,
+            auth,
+        }) = serde_json::from_value(json).unwrap();
+
+        assert_eq!(host, "imap.example.com".to_string());
+        assert_eq!(port, 993);
+        assert_eq!(login, "jose@kagi.com");
+        // Defer the auth to the other tests
+        assert!(matches!(auth, Auth::OAuth { .. }));
+    }
+
+    #[test]
+    fn ensure_auth_password_format() {
+        let json = json!({
+            "type": "password",
+            "raw": "super-secret"
+        });
+        let Auth::Password(PasswordConfig { raw }) = serde_json::from_value::<Auth>(json).unwrap()
+        else {
+            panic!("wrong format")
+        };
+        assert_eq!(raw, "super-secret");
+    }
+
+    #[test]
+    fn ensure_auth_oauth_format() {
+        // Test values, this GApp has been deleted already
+        let json = json!({
+            "type": "oauth",
+            "client_id": "client-id",
+            "client_secret": "client-secret",
+            "auth_url": "https://localhost",
+            "token_url": "https://localhost",
+            "access_token": "access-token",
+            "refresh_token": "refresh-token",
+        });
+        let Auth::OAuth(OAuthConfig {
+            client_id,
+            client_secret,
+            access_token,
+            refresh_token,
+            auth_url,
+            token_url,
+        }) = serde_json::from_value::<Auth>(json).unwrap()
+        else {
+            panic!("wrong format");
+        };
+
+        assert_eq!(client_id, ClientId::new("client-id".to_string()));
+        assert_eq!(
+            client_secret.into_secret(),
+            ClientSecret::new("client-secret".to_string()).into_secret()
+        );
+        assert_eq!(
+            auth_url,
+            AuthUrl::new("https://localhost".to_string()).unwrap()
+        );
+        assert_eq!(
+            token_url,
+            TokenUrl::new("https://localhost".to_string()).unwrap()
+        );
+        assert_eq!(
+            access_token.into_secret(),
+            AccessToken::new("access-token".to_string()).into_secret()
+        );
+        assert_eq!(
+            refresh_token.into_secret(),
+            RefreshToken::new("refresh-token".to_string()).into_secret()
+        );
+    }
+}

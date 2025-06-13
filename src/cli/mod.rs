@@ -1,3 +1,7 @@
+use std::path::PathBuf;
+
+pub mod configure;
+
 #[derive(Debug, Clone, clap::Parser)]
 pub struct App {
     #[command(subcommand)]
@@ -11,7 +15,9 @@ pub enum Command {
         provider: Provider,
     },
 
-    Run {},
+    Run {
+        config: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Default, clap::ValueEnum)]
