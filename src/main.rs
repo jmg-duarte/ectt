@@ -4,25 +4,21 @@ mod imap;
 mod oauth;
 mod tui;
 
-use std::env::current_dir;
-use std::fs::OpenOptions;
-use std::sync::mpsc::{channel, Receiver, RecvError, Sender, TryRecvError};
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
-use dirs::config_dir;
 use ratatui::DefaultTerminal;
+use std::sync::mpsc::SendError;
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 
-use crate::config::{get_config_path, load_config, ImapConfig, ReadBackend};
+use crate::config::{get_config_path, load_config, ReadBackend};
 use crate::imap::{imap_thread, ReadMessage, Response};
 use crate::tui::compose::ComposeWidget;
 use crate::tui::inbox::{InboxState, InboxWidget};
-use crate::tui::login::LoginWidget;
 use crate::tui::reading::ReadingWidget;
 use crate::{cli::App, oauth::execute_authentication_flow};
-use ratatui::widgets::TableState;
 
 #[derive(Debug, thiserror::Error)]
 enum Error {
@@ -130,16 +126,48 @@ pub enum Action {
 struct ScreenState {
     inbox_state: InboxState,
     request_inflight: bool,
+
+    to_imap: Sender<ReadMessage>,
+    from_imap: Receiver<Response>,
 }
 
-impl Default for ScreenState {
-    fn default() -> Self {
+impl ScreenState {
+    fn new(to_imap: Sender<ReadMessage>, from_imap: Receiver<Response>) -> Self {
         Self {
             inbox_state: InboxState::new(),
             request_inflight: false,
+            to_imap,
+            from_imap,
         }
     }
 }
+
+impl ScreenState {
+    fn load(&mut self) -> Result<(), SendError<ReadMessage>> {
+        self.to_imap.send(ReadMessage::ReadInbox {
+            count: 5,
+            offset: 0,
+        })?;
+        self.request_inflight = true;
+        Ok(())
+    }
+
+    fn load_more(&mut self, count: u32) -> Result<(), SendError<ReadMessage>> {
+        if !self.request_inflight {
+            if let Some(selected) = self.inbox_state.table.selected() {
+                if selected == self.inbox_state.inbox.len() - 1 {
+                    self.to_imap.send(ReadMessage::ReadInbox {
+                        count,
+                        offset: self.inbox_state.inbox.len() as u32,
+                    })?;
+                    self.request_inflight = true;
+                }
+            }
+        };
+        Ok(())
+    }
+}
+
 fn run_tui(
     mut terminal: DefaultTerminal,
     to_imap: Sender<ReadMessage>,
@@ -147,18 +175,12 @@ fn run_tui(
 ) -> std::io::Result<()> {
     let mut screen = Screen::from(Page::Inbox);
 
-    let mut state = ScreenState::default();
+    let mut state = ScreenState::new(to_imap, from_imap);
 
-    to_imap
-        .send(ReadMessage::ReadInbox {
-            count: 5,
-            offset: 0,
-        })
-        .unwrap();
-    state.request_inflight = true;
+    state.load().unwrap();
 
     loop {
-        match from_imap.try_recv() {
+        match state.from_imap.try_recv() {
             Ok(Response::Inbox(inbox)) => {
                 state.inbox_state.inbox.extend(inbox);
                 state.request_inflight = false;
@@ -182,24 +204,18 @@ fn run_tui(
 
             let action = match &mut screen {
                 Screen::Inbox(widget) => {
-                    if let Event::Key(KeyEvent {
-                        code: KeyCode::Down,
-                        ..
-                    }) = event
-                    {
-                        if !state.request_inflight {
-                            if let Some(selected) = state.inbox_state.table.selected() {
-                                if selected == state.inbox_state.inbox.len() - 1 {
-                                    to_imap
-                                        .send(ReadMessage::ReadInbox {
-                                            count: 5,
-                                            offset: state.inbox_state.inbox.len() as u32,
-                                        })
-                                        .unwrap();
-                                    state.request_inflight = true;
-                                }
-                            }
+                    // Special "pre-events"
+                    match event {
+                        Event::Key(KeyEvent {
+                            code: KeyCode::Down,
+                            ..
+                        }) => {
+                            if let Err(err) = state.load_more(5) {
+                                tracing::error!("Failed to send message to IMAP thread: {err}")
+                            };
+                            // TODO: unsure what to do here
                         }
+                        _ => { /* no-op */ }
                     }
 
                     widget.handle_event(event, &mut state.inbox_state)

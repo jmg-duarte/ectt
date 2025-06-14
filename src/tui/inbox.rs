@@ -53,8 +53,7 @@ impl<'w> InboxWidget<'w> {
         let table = Table::new(empty::<Row>(), widths)
             .header(header)
             .block(Block::default().borders(Borders::ALL).title("Posts"))
-            .row_highlight_style(Style::default().bg(Color::Blue).fg(Color::White))
-            .highlight_symbol(">> ");
+            .row_highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
 
         Self {
             table,
