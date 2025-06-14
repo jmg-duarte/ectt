@@ -7,11 +7,11 @@ use tui_textarea::TextArea;
 
 use crate::tui::focus::FocusStyle;
 
-pub struct AddressWidget<'w> {
+pub struct LineWidget<'w> {
     textarea: TextArea<'w>,
 }
 
-impl<'w> AddressWidget<'w> {
+impl<'w> LineWidget<'w> {
     pub fn new<T: Into<Title<'w>>>(title: T) -> Self {
         Self {
             textarea: {
@@ -47,7 +47,7 @@ impl<'w> AddressWidget<'w> {
     }
 }
 
-impl<'w> Widget for &AddressWidget<'w> {
+impl<'w> Widget for &LineWidget<'w> {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
@@ -56,19 +56,19 @@ impl<'w> Widget for &AddressWidget<'w> {
     }
 }
 
-impl<'w> AsRef<TextArea<'w>> for AddressWidget<'w> {
+impl<'w> AsRef<TextArea<'w>> for LineWidget<'w> {
     fn as_ref(&self) -> &TextArea<'w> {
         &self.textarea
     }
 }
 
-impl<'w> AsMut<TextArea<'w>> for AddressWidget<'w> {
+impl<'w> AsMut<TextArea<'w>> for LineWidget<'w> {
     fn as_mut(&mut self) -> &mut TextArea<'w> {
-        &mut self.textarea
+        (&mut self.textarea)
     }
 }
 
-impl<'w> FocusStyle for AddressWidget<'w> {
+impl<'w> FocusStyle for LineWidget<'w> {
     fn unfocused(&mut self) {
         let Some(block) = self.textarea.block() else {
             return;

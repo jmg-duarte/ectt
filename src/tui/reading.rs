@@ -1,12 +1,13 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    widgets::Widget,
+    widgets::{StatefulWidget, Widget},
 };
 
 use crate::{
+    imap::ParsedEmail,
     tui::{
-        address::AddressWidget,
+        address::LineWidget,
         body::BodyWidget,
         combo::KeyCombo,
         focus::FocusStyle,
@@ -17,28 +18,42 @@ use crate::{
 pub struct ReadingWidget<'w> {
     focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
 
-    to: AddressWidget<'w>,
-    cc: AddressWidget<'w>,
-    bcc: AddressWidget<'w>,
+    to: LineWidget<'w>,
+    cc: LineWidget<'w>,
+    bcc: LineWidget<'w>,
+    subject: LineWidget<'w>,
     body: BodyWidget<'w>,
     help: HelpWidget<'w>,
 }
 
-impl<'w> Default for ReadingWidget<'w> {
-    fn default() -> Self {
+impl ReadingWidget<'_> {
+    pub fn new(
+        from: String,
+        cc: Vec<String>,
+        bcc: Vec<String>,
+        subject: String,
+        body: String,
+    ) -> Self {
         Self {
             to: {
-                let mut widget = AddressWidget::with_contents("To", "jose@kagi.com".to_string());
+                let mut widget = LineWidget::with_contents("From", from);
                 // ensure its focused on the first render
                 widget.focused();
                 widget
             },
-            cc: AddressWidget::with_contents("Cc", "jose@kagi.com".to_string()),
-            bcc: AddressWidget::with_contents("Bcc", "jose@kagi.com".to_string()),
-            body: BodyWidget::new(),
+            cc: LineWidget::with_contents("Cc", cc.join(", ")),
+            bcc: LineWidget::with_contents("Bcc", bcc.join(", ")),
+            subject: LineWidget::with_contents("Subject", subject),
+            body: BodyWidget::with_contents(body),
             help: Self::help(),
             focused: Default::default(),
         }
+    }
+}
+
+impl From<ParsedEmail> for ReadingWidget<'_> {
+    fn from(value: ParsedEmail) -> Self {
+        Self::new(value.from, value.cc, value.bcc, value.subject, value.body)
     }
 }
 
@@ -118,13 +133,11 @@ impl<'w> ReadingWidget<'w> {
 }
 
 impl<'w> Widget for &ReadingWidget<'w> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
+                Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(3),
                 Constraint::Length(3),
@@ -136,7 +149,8 @@ impl<'w> Widget for &ReadingWidget<'w> {
         self.to.render(chunks[0], buf);
         self.cc.render(chunks[1], buf);
         self.bcc.render(chunks[2], buf);
-        self.body.render(chunks[3], buf);
-        self.help.render(chunks[4], buf);
+        self.subject.render(chunks[3], buf);
+        self.body.render(chunks[4], buf);
+        self.help.render(chunks[5], buf);
     }
 }

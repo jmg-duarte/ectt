@@ -80,10 +80,6 @@ impl<'w> InboxWidget<'w> {
             (crossterm::event::KeyCode::Char('n'), KeyModifiers::CONTROL) => {
                 Action::GoTo(Page::Compose)
             }
-            (crossterm::event::KeyCode::Enter, _) => {
-                // TODO: read the email from the "provider"
-                Action::GoTo(Page::Reading)
-            }
             (crossterm::event::KeyCode::Down, _) => {
                 state.table.select_next();
                 Action::Tick

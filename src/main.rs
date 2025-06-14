@@ -10,6 +10,7 @@ use std::thread;
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use mailparse::ParsedMail;
 use ratatui::DefaultTerminal;
 use std::sync::mpsc::SendError;
 use tracing::Level;
@@ -32,7 +33,7 @@ enum Error {
 }
 
 fn setup_logging() -> WorkerGuard {
-    let file_appender = tracing_appender::rolling::never(".", "ectt.log");
+    let file_appender = tracing_appender::rolling::hourly("ectt.log", "");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     tracing_subscriber::fmt()
@@ -128,7 +129,7 @@ impl<'w> From<Page> for Screen<'w> {
         match value {
             Page::Inbox => Screen::Inbox(InboxWidget::new()),
             Page::Compose => Screen::Compose(ComposeWidget::default()),
-            Page::Reading => Screen::Reading(ReadingWidget::default()),
+            Page::Reading => unreachable!("This should be handled in a different way"),
         }
     }
 }
@@ -236,6 +237,23 @@ fn run_tui(
                                     return Ok(());
                                 }
                             };
+                        }
+
+                        Event::Key(KeyEvent {
+                            code: KeyCode::Enter,
+                            ..
+                        }) => {
+                            if let Some(selected) = state.inbox_state.table.selected() {
+                                let Some(parsed_email) = state.inbox_state.inbox.get(selected)
+                                else {
+                                    tracing::warn!("Selected non-existing email, ignoring command");
+                                    continue;
+                                };
+                                tracing::debug!("{parsed_email:?}");
+                                screen = Screen::Reading(ReadingWidget::from(parsed_email.clone()));
+                                // We've handled what there is to handle, don't handle at the widget level
+                                continue;
+                            }
                         }
                         _ => { /* no-op */ }
                     }

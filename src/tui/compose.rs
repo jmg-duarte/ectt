@@ -6,7 +6,7 @@ use ratatui::{
 
 use crate::{
     tui::{
-        address::AddressWidget,
+        address::LineWidget,
         body::BodyWidget,
         combo::KeyCombo,
         focus::FocusStyle,
@@ -18,9 +18,9 @@ use crate::{
 pub struct ComposeWidget<'w> {
     focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
 
-    to: AddressWidget<'w>,
-    cc: AddressWidget<'w>,
-    bcc: AddressWidget<'w>,
+    to: LineWidget<'w>,
+    cc: LineWidget<'w>,
+    bcc: LineWidget<'w>,
     body: BodyWidget<'w>,
     help: HelpWidget<'w>,
 }
@@ -28,9 +28,9 @@ pub struct ComposeWidget<'w> {
 impl<'w> Default for ComposeWidget<'w> {
     fn default() -> Self {
         Self {
-            to: AddressWidget::new("To"),
-            cc: AddressWidget::new("Cc"),
-            bcc: AddressWidget::new("Bcc"),
+            to: LineWidget::new("To"),
+            cc: LineWidget::new("Cc"),
+            bcc: LineWidget::new("Bcc"),
             body: BodyWidget::new(),
             help: Self::help(),
             focused: Default::default(),

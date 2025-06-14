@@ -3,3 +3,4 @@
 *.creds.json
 config.json
 ectt.log
+ectt.log/

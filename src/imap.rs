@@ -6,7 +6,7 @@ use oauth2::url::form_urlencoded::parse;
 
 use crate::config::{Auth, ImapConfig, OAuthConfig, PasswordConfig};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedEmail {
     pub from: String,
     pub cc: Vec<String>,
