@@ -142,7 +142,12 @@ pub fn imap_thread(config: ImapConfig, rx: Receiver<ReadMessage>, tx: Sender<Res
         match message {
             ReadMessage::ReadInbox { count, offset } => {
                 let emails = state.read_inbox(count, offset);
-                tx.send(Response::Inbox(emails)).unwrap();
+                if let Err(err) = tx.send(Response::Inbox(emails)) {
+                    tracing::error!(
+                        "Failed to send inbox response to main thread with error: {err}"
+                    );
+                    break;
+                }
             }
         }
     }

@@ -4,7 +4,9 @@ mod imap;
 mod oauth;
 mod tui;
 
+use std::any::Any;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+use std::thread;
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
@@ -90,7 +92,21 @@ fn r(ReadBackend::Imap(config): ReadBackend) -> Result<(), Error> {
     let result = run_tui(terminal, to_imap, from_imap);
     ratatui::restore();
 
-    imap_thread.join().unwrap();
+    if let Err(err) = imap_thread.join() {
+        if err.is::<Box<dyn std::error::Error>>() {
+            tracing::error!(
+                "Thread panicked with error: {}",
+                err.downcast::<Box<dyn std::error::Error>>()
+                    .expect("`.is` failed us")
+            );
+        } else {
+            tracing::error!("Thread panicked with error: {:?}", err);
+        }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Thread panic",
+        ))?
+    };
 
     Ok(result?)
 }
@@ -211,9 +227,15 @@ fn run_tui(
                             ..
                         }) => {
                             if let Err(err) = state.load_more(5) {
-                                tracing::error!("Failed to send message to IMAP thread: {err}")
+                                tracing::error!("Failed to send message to IMAP thread: {err}");
+                                if cfg!(debug_assertions) {
+                                    panic!("Channel was closed with pending messages");
+                                } else {
+                                    // If the channel is closed, it should mean that the program is exiting
+                                    // so we close gracefully
+                                    return Ok(());
+                                }
                             };
-                            // TODO: unsure what to do here
                         }
                         _ => { /* no-op */ }
                     }
