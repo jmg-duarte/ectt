@@ -1,3 +1,5 @@
+use std::cmp;
+
 use chrono::{DateTime, Utc};
 use imap::Connection;
 use itertools::Itertools;
@@ -10,7 +12,8 @@ use oauth2::{
 
 use crate::imap::{
     config::{Auth, ImapConfig},
-    OAuthConfigWithUser, ParsedEmail,
+    oauth::OAuthConfigWithUser,
+    ParsedEmail,
 };
 
 pub struct UnauthenticatedState {
@@ -55,9 +58,10 @@ impl UnauthenticatedState {
     fn basic_authenticate(self) -> Result<AuthenticatedState, (imap::Error, Self)> {
         match &self.config.auth {
             Auth::Password(password_config) => {
-                let login = self.config.login.clone();
-
-                match self.client.login(login, &password_config.raw) {
+                match self
+                    .client
+                    .login(self.config.login.as_str(), &password_config.raw)
+                {
                     Ok(session) => Ok(AuthenticatedState { session }),
                     Err((err, client)) => Err((
                         err,
@@ -69,10 +73,7 @@ impl UnauthenticatedState {
                 }
             }
             Auth::OAuth(oauth_config) => {
-                let authenticator = OAuthConfigWithUser {
-                    user: &self.config.login,
-                    config: &oauth_config,
-                };
+                let authenticator = OAuthConfigWithUser::new(&self.config.login, &oauth_config);
                 match self.client.authenticate("XOAUTH2", &authenticator) {
                     Ok(session) => Ok(AuthenticatedState { session }),
                     Err((err, client)) => Err((
@@ -120,22 +121,22 @@ pub struct AuthenticatedState {
 }
 
 impl AuthenticatedState {
-    pub fn read_inbox(&mut self, count: u32, offset: u32) -> Vec<ParsedEmail> {
-        self.session.select("INBOX").unwrap();
-        // Fetch the 20 most recent emails by getting the highest UID and fetching the last 20
-        let uids = self.session.uid_search("ALL").unwrap();
-        let max_uid = uids.iter().max().copied().unwrap_or(1);
+    pub fn read_inbox(
+        &mut self,
+        count: u32,
+        offset: u32,
+    ) -> Result<Vec<ParsedEmail>, crate::Error> {
+        self.session.select("INBOX")?;
 
+        let uids = self.session.uid_search("ALL")?;
+        let max_uid = uids.iter().max().copied().unwrap_or(1);
         let top = max_uid.saturating_sub(offset).max(1);
         let bot = max_uid.saturating_sub(offset + count).max(1);
 
-        let messages = self
-            .session
-            .uid_fetch(
-                format!("{bot}:{top}"),
-                "(UID INTERNALDATE RFC822 RFC822.TEXT)",
-            )
-            .unwrap();
+        let messages = self.session.uid_fetch(
+            format!("{bot}:{top}"),
+            "(UID INTERNALDATE RFC822 RFC822.TEXT)",
+        )?;
 
         let mut parsed_emails = Vec::with_capacity(messages.len());
 
@@ -171,6 +172,7 @@ impl AuthenticatedState {
             };
 
             parsed_emails.push(ParsedEmail {
+                uid: message.uid.unwrap_or_default(),
                 date,
                 from: Self::get_from(&parsed),
                 cc: Self::get_cc(&parsed),
@@ -182,7 +184,8 @@ impl AuthenticatedState {
                     .join(""),
             });
         }
-        parsed_emails
+        parsed_emails.sort_by_cached_key(|parsed| cmp::Reverse(parsed.uid));
+        Ok(parsed_emails)
     }
 
     pub fn get_from(parsed: &mail_parser::Message) -> String {

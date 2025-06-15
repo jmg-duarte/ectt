@@ -5,23 +5,31 @@ use ratatui::{
 };
 
 #[derive(Debug)]
-pub struct LoadingPopup;
+pub struct Popup {
+    message: String,
+}
 
-impl Widget for LoadingPopup {
+impl Popup {
+    pub const fn new(message: String) -> Self {
+        Self { message }
+    }
+}
+
+impl Widget for Popup {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
         Self: Sized,
     {
         // take up a third of the screen vertically and half horizontally
         let popup_area = Rect {
-            x: area.width / 2 - (("Loading more emails!".len() + 2) as u16 / 2),
+            x: area.width / 2 - ((self.message.len() + 2) as u16 / 2),
             y: area.height / 3,
-            width: ("Loading more emails!".len() + 2) as u16,
+            width: (self.message.len() + 2) as u16,
             height: 3,
         };
         Clear.render(popup_area, buf);
 
-        Paragraph::new("Loading more emails!")
+        Paragraph::new(self.message)
             .wrap(Wrap { trim: true })
             .style(Style::new().yellow())
             .block(

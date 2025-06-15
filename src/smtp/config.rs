@@ -11,12 +11,12 @@ use oauth2::{
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
-pub enum ReadBackend {
-    Imap(ImapConfig),
+pub enum SendBackend {
+    Smtp(SmtpConfig),
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct ImapConfig {
+pub struct SmtpConfig {
     pub host: String,
     pub port: u16,
     pub login: String,
@@ -64,7 +64,7 @@ mod test {
     use oauth2::{AccessToken, AuthUrl, ClientId, ClientSecret, RefreshToken, TokenUrl};
     use serde_json::json;
 
-    use super::{Auth, ImapConfig, OAuthConfig, PasswordConfig, ReadBackend};
+    use super::{Auth, OAuthConfig, PasswordConfig, SendBackend, SmtpConfig};
 
     /// Compilation will fail if for some reason the types stop implementing serde::Deserialize
     #[test]
@@ -74,30 +74,30 @@ mod test {
             T: serde::Deserialize<'de>,
         {
         }
-        impls_deserialize::<ReadBackend>();
+        impls_deserialize::<SendBackend>();
         impls_deserialize::<Auth>();
     }
 
     #[test]
-    fn ensure_imap_password_format() {
+    fn ensure_smtp_password_format() {
         let json = json!({
-            "type": "imap",
-            "host": "imap.example.com",
-            "port": 993,
+            "type": "smtp",
+            "host": "smtp.example.com",
+            "port": 465,
             "login": "jose@kagi.com",
             "auth": {
                 "type": "password",
                 "raw": "super-secret"
             }
         });
-        let ReadBackend::Imap(ImapConfig {
+        let SendBackend::Smtp(SmtpConfig {
             host,
             port,
             login,
             auth,
         }) = serde_json::from_value(json).unwrap();
 
-        assert_eq!(host, "imap.example.com".to_string());
+        assert_eq!(host, "smtp.example.com".to_string());
         assert_eq!(port, 993);
         assert_eq!(login, "jose@kagi.com");
         // Defer the auth to the other tests
@@ -105,10 +105,10 @@ mod test {
     }
 
     #[test]
-    fn ensure_imap_oath_format() {
+    fn ensure_smtp_oath_format() {
         let json = json!({
-            "type": "imap",
-            "host": "imap.example.com",
+            "type": "smtp",
+            "host": "smtp.example.com",
             "port": 993,
             "login": "jose@kagi.com",
             "auth": {
@@ -121,14 +121,14 @@ mod test {
                 "refresh_token": "refresh-token",
             }
         });
-        let ReadBackend::Imap(ImapConfig {
+        let SendBackend::Smtp(SmtpConfig {
             host,
             port,
             login,
             auth,
         }) = serde_json::from_value(json).unwrap();
 
-        assert_eq!(host, "imap.example.com".to_string());
+        assert_eq!(host, "smtp.example.com".to_string());
         assert_eq!(port, 993);
         assert_eq!(login, "jose@kagi.com");
         // Defer the auth to the other tests

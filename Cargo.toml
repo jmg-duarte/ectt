@@ -29,6 +29,7 @@ dirs = "6.0.0"
 tracing-appender = "0.2.3"
 chrono = "0.4.41"
 mail-parser = "0.11.0"
+lettre = { version = "0.11.17", features = ["rustls-tls"] }
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }
