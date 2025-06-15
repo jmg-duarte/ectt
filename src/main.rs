@@ -4,19 +4,13 @@ mod imap;
 mod oauth;
 mod tui;
 
-use std::any::Any;
 use std::io::ErrorKind;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
-use std::thread;
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
-use mailparse::ParsedMail;
 use oauth2::basic::BasicRequestTokenError;
 use oauth2::{reqwest, HttpClientError};
-use ratatui::layout::Rect;
-use ratatui::style::{Style, Stylize};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap};
 use ratatui::DefaultTerminal;
 use std::sync::mpsc::SendError;
 use tracing::Level;

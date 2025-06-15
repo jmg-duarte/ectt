@@ -27,8 +27,8 @@ tui-textarea = { version = "0.7.0" }
 itertools = { version = "0.14.0" }
 dirs = "6.0.0"
 tracing-appender = "0.2.3"
-mailparse = "0.16.1"
 chrono = "0.4.41"
+mail-parser = "0.11.0"
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

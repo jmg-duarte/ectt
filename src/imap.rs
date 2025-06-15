@@ -1,16 +1,16 @@
 use std::sync::mpsc::{Receiver, Sender};
 
-use chrono::{DateTime, TimeZone, Utc};
-use imap::{Client, Connection, Session};
-use mailparse::{dateparse, parse_header, parse_headers, parse_mail, MailHeader, MailHeaderMap};
+use chrono::{DateTime, Utc};
+use imap::Connection;
+use itertools::Itertools;
+use mail_parser::MessageParser;
 use oauth2::{
     basic::BasicRequestTokenError,
-    reqwest::{self, ClientBuilder, Error},
-    url::form_urlencoded::parse,
+    reqwest::{self, Error},
     HttpClientError, TokenResponse,
 };
 
-use crate::config::{Auth, ImapConfig, OAuthConfig, PasswordConfig};
+use crate::config::{Auth, ImapConfig, OAuthConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedEmail {
@@ -125,48 +125,107 @@ impl AuthenticatedState {
 
         let mut parsed_emails = Vec::with_capacity(messages.len());
 
+        let parser = MessageParser::new();
+
         for message in messages.iter() {
-            let parsed = match message.body().map(parse_mail) {
-                Some(Ok(parsed)) => parsed,
-                Some(Err(err)) => {
-                    tracing::error!("Failed to parse email with error: {err}");
-                    continue;
-                }
+            let Some(body) = message.body() else {
+                tracing::warn!("Email does not contain a body, ignoring");
+                continue;
+            };
+
+            let parsed = match parser.parse(body) {
+                Some(parsed) => parsed,
                 None => {
-                    tracing::error!("Message does not have a body");
+                    tracing::error!("Failed to parse email message, ignoring...");
                     continue;
                 }
             };
 
-            let headers = parsed.get_headers();
-            let date = message
-                .internal_date()
-                .map(|internal_date| internal_date.to_utc())
-                .unwrap_or_else(|| {
-                    headers
-                        .get_first_value("Received")
-                        .map(|received| {
-                            chrono::DateTime::from_timestamp(
-                                dateparse(&received).unwrap_or_default(),
-                                0,
-                            )
-                        })
-                        .flatten()
-                        .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH)
-                });
+            let date = match message.internal_date() {
+                Some(date) => date.to_utc(),
+                None => match parsed.date() {
+                    Some(parsed_date) => {
+                        DateTime::parse_from_rfc3339(parsed_date.to_rfc3339().as_str())
+                            .expect("one of the libraries messed up RFC3339")
+                            .to_utc()
+                    }
+                    None => {
+                        tracing::warn!("No date was found, defaulting to UNIX_EPOCH");
+                        DateTime::<Utc>::UNIX_EPOCH
+                    }
+                },
+            };
 
             parsed_emails.push(ParsedEmail {
                 date,
-                from: headers.get_first_value("From").unwrap_or_default(),
-                cc: headers.get_all_values("Cc"),
-                bcc: headers.get_all_values("Bcc"),
-                subject: headers
-                    .get_first_value("Subject")
-                    .unwrap_or_else(|| "No subject".to_string()),
-                body: parsed.get_body().unwrap(),
+                from: Self::get_from(&parsed),
+                cc: Self::get_cc(&parsed),
+                bcc: Self::get_bcc(&parsed),
+                subject: parsed.subject().unwrap_or("No subject").to_string(),
+                body: (0..parsed.text_body_count())
+                    .into_iter()
+                    .map(|idx| parsed.body_text(idx).unwrap_or_default().to_string())
+                    .join(""),
             });
         }
         parsed_emails
+    }
+
+    fn get_from(parsed: &mail_parser::Message) -> String {
+        let from = match parsed.from() {
+            Some(from) => from,
+            None => return "No sender".to_string(),
+        };
+
+        let sender = match from.first() {
+            Some(sender) => sender,
+            None => return "No sender".to_string(),
+        };
+
+        match (&sender.name, &sender.address) {
+            (None, None) => "Unknown sender".to_string(),
+            (None, Some(address)) => address.to_string(),
+            (Some(name), None) => name.to_string(),
+            (Some(name), Some(address)) => format!("{name} ({address})"),
+        }
+    }
+
+    fn get_cc(parsed: &mail_parser::Message) -> Vec<String> {
+        let cc = match parsed.cc() {
+            Some(cc) => cc,
+            None => return vec![],
+        };
+
+        // I could parse the groups manually and probably get slightly better perf here but this works
+        cc.clone()
+            .into_list()
+            .iter()
+            .map(|addr| match (&addr.name, &addr.address) {
+                (None, None) => "Unknown CC".to_string(),
+                (None, Some(address)) => address.to_string(),
+                (Some(name), None) => name.to_string(),
+                (Some(name), Some(address)) => format!("{name} ({address})"),
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn get_bcc(parsed: &mail_parser::Message) -> Vec<String> {
+        let bcc = match parsed.bcc() {
+            Some(bcc) => bcc,
+            None => return vec![],
+        };
+
+        // I could parse the groups manually and probably get slightly better perf here but this works
+        bcc.clone()
+            .into_list()
+            .iter()
+            .map(|addr| match (&addr.name, &addr.address) {
+                (None, None) => "Unknown BCC".to_string(),
+                (None, Some(address)) => address.to_string(),
+                (Some(name), None) => name.to_string(),
+                (Some(name), Some(address)) => format!("{name} ({address})"),
+            })
+            .collect::<Vec<_>>()
     }
 }
 

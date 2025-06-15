@@ -64,7 +64,7 @@ impl<'w> AsRef<TextArea<'w>> for LineWidget<'w> {
 
 impl<'w> AsMut<TextArea<'w>> for LineWidget<'w> {
     fn as_mut(&mut self) -> &mut TextArea<'w> {
-        (&mut self.textarea)
+        &mut self.textarea
     }
 }
 
