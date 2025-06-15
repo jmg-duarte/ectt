@@ -1,5 +1,4 @@
 mod cli;
-mod config;
 mod imap;
 mod oauth;
 mod tui;
@@ -12,7 +11,7 @@ use oauth2::{reqwest, HttpClientError};
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 
-use crate::config::{get_config_path, load_config, ReadBackend};
+use crate::imap::config::{get_config_path, load_config, ReadBackend};
 use crate::imap::imap_thread;
 use crate::{cli::App, oauth::execute_authentication_flow};
 

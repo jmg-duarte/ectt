@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use color_eyre::owo_colors::OwoColorize;
 use imap::Connection;
 use itertools::Itertools;
 use mail_parser::MessageParser;
@@ -9,9 +8,9 @@ use oauth2::{
     HttpClientError, TokenResponse,
 };
 
-use crate::{
+use crate::imap::{
     config::{Auth, ImapConfig},
-    imap::{OAuthConfigWithUser, ParsedEmail},
+    OAuthConfigWithUser, ParsedEmail,
 };
 
 pub struct UnauthenticatedState {

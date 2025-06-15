@@ -1,9 +1,9 @@
+pub mod config;
 pub mod state;
-use crate::{
-    config::{ImapConfig, OAuthConfig},
-    imap::state::UnauthenticatedState,
-};
+
+use crate::imap::state::UnauthenticatedState;
 use chrono::{DateTime, Utc};
+use config::{ImapConfig, OAuthConfig};
 use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

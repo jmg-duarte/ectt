@@ -103,7 +103,7 @@ mod test {
     use oauth2::{AccessToken, AuthUrl, ClientId, ClientSecret, RefreshToken, TokenUrl};
     use serde_json::json;
 
-    use crate::config::{Auth, ImapConfig, OAuthConfig, PasswordConfig, ReadBackend};
+    use super::{Auth, ImapConfig, OAuthConfig, PasswordConfig, ReadBackend};
 
     /// Compilation will fail if for some reason the types stop implementing serde::Deserialize
     #[test]
