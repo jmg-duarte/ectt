@@ -5,12 +5,15 @@ mod oauth;
 mod tui;
 
 use std::any::Any;
+use std::io::ErrorKind;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::thread;
 
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use mailparse::ParsedMail;
+use oauth2::basic::BasicRequestTokenError;
+use oauth2::{reqwest, HttpClientError};
 use ratatui::DefaultTerminal;
 use std::sync::mpsc::SendError;
 use tracing::Level;
@@ -30,6 +33,12 @@ enum Error {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    RefreshToken(#[from] BasicRequestTokenError<HttpClientError<reqwest::Error>>),
+
+    #[error(transparent)]
+    Imap(#[from] ::imap::Error),
 }
 
 fn setup_logging() -> WorkerGuard {
@@ -185,11 +194,12 @@ impl ScreenState {
     }
 }
 
+#[tracing::instrument(skip_all)]
 fn run_tui(
     mut terminal: DefaultTerminal,
     to_imap: Sender<ReadMessage>,
     from_imap: Receiver<Response>,
-) -> std::io::Result<()> {
+) -> Result<(), Error> {
     let mut screen = Screen::from(Page::Inbox);
 
     let mut state = ScreenState::new(to_imap, from_imap);
@@ -202,9 +212,19 @@ fn run_tui(
                 state.inbox_state.inbox.extend(inbox);
                 state.request_inflight = false;
             }
+            Ok(Response::Error(err)) => {
+                tracing::error!("IMAP thread failed with error: {err}");
+                tracing::error!("Exiting...");
+                return Err(err);
+            }
             Err(TryRecvError::Empty) => { /* no-op */ }
             Err(TryRecvError::Disconnected) => {
-                panic!()
+                tracing::error!("IMAP channel disconnected");
+                tracing::error!("Exiting...");
+                return Err(Error::Io(std::io::Error::new(
+                    ErrorKind::Other,
+                    "IMAP channel got disconnected",
+                )));
             }
         }
 

@@ -3,7 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use oauth2::{AccessToken, AuthUrl, ClientId, ClientSecret, RefreshToken, TokenUrl};
+use oauth2::{
+    basic::BasicClient, AccessToken, AuthUrl, ClientId, ClientSecret, EndpointNotSet, EndpointSet,
+    RefreshToken, TokenUrl,
+};
 
 pub fn get_config_path<P>(path: Option<P>) -> Result<PathBuf, crate::Error>
 where
@@ -82,6 +85,17 @@ pub struct OAuthConfig {
     pub auth_url: AuthUrl,
     #[serde(alias = "token_uri")]
     pub token_url: TokenUrl,
+}
+
+impl OAuthConfig {
+    pub fn get_client(
+        self,
+    ) -> BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet> {
+        BasicClient::new(self.client_id)
+            .set_client_secret(self.client_secret)
+            .set_auth_uri(self.auth_url)
+            .set_token_uri(self.token_url)
+    }
 }
 
 #[cfg(test)]

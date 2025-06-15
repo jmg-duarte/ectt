@@ -10,7 +10,7 @@ imap = { version = "3.0.0-alpha.15", default-features = false, features = [
     "rustls-tls",
 ] }
 clap = { version = "4.5.39", features = ["derive"] }
-oauth2 = { version = "5.0.0" }
+oauth2 = { version = "5.0.0", features = ["reqwest-blocking"] }
 axum = { version = "0.8.4", features = ["macros"] }
 tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

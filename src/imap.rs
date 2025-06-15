@@ -3,7 +3,12 @@ use std::sync::mpsc::{Receiver, Sender};
 use chrono::{DateTime, TimeZone, Utc};
 use imap::{Client, Connection, Session};
 use mailparse::{dateparse, parse_header, parse_headers, parse_mail, MailHeader, MailHeaderMap};
-use oauth2::url::form_urlencoded::parse;
+use oauth2::{
+    basic::BasicRequestTokenError,
+    reqwest::{self, ClientBuilder, Error},
+    url::form_urlencoded::parse,
+    HttpClientError, TokenResponse,
+};
 
 use crate::config::{Auth, ImapConfig, OAuthConfig, PasswordConfig};
 
@@ -23,6 +28,8 @@ pub enum ReadMessage {
 
 pub enum Response {
     Inbox(Vec<ParsedEmail>),
+
+    Error(crate::Error),
 }
 
 struct UnauthenticatedState {
@@ -63,6 +70,33 @@ impl UnauthenticatedState {
                     )),
                 }
             }
+        }
+    }
+
+    fn refresh_oauth_token(
+        &mut self,
+    ) -> Result<(), BasicRequestTokenError<HttpClientError<Error>>> {
+        let Auth::OAuth(ref mut config) = self.config.auth else {
+            return Ok(());
+        };
+
+        let http_client = reqwest::blocking::ClientBuilder::new()
+            // Following redirects opens the client up to SSRF vulnerabilities.
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .expect("Client should build");
+
+        let result = config
+            .clone()
+            .get_client()
+            .exchange_refresh_token(&config.refresh_token)
+            .request(&http_client);
+        match result {
+            Ok(access_token) => {
+                config.access_token = access_token.access_token().to_owned();
+                Ok(())
+            }
+            Err(err) => Err(err),
         }
     }
 }
@@ -136,6 +170,7 @@ impl AuthenticatedState {
     }
 }
 
+#[tracing::instrument(skip_all)]
 pub fn imap_thread(config: ImapConfig, rx: Receiver<ReadMessage>, tx: Sender<Response>) {
     let ImapConfig { host, port, .. } = config.clone();
     let state = UnauthenticatedState {
@@ -145,7 +180,44 @@ pub fn imap_thread(config: ImapConfig, rx: Receiver<ReadMessage>, tx: Sender<Res
 
     let mut state = match state.authenticate() {
         Ok(state) => state,
-        Err((err, client)) => panic!("{err}"), // TODO
+        Err((err, mut client)) => {
+            match client.config.auth {
+                Auth::Password(_) => {
+                    tracing::error!("Failed to authenticate using password with error: {err}");
+                    if let Err(err) = tx.send(Response::Error(err.into())) {
+                        tracing::error!(
+                            "Failed to send error message to main thread with error: {err}"
+                        )
+                    };
+                    return; // Nothing else to do, quit thread
+                }
+                Auth::OAuth(_) => {
+                    if let Err(err) = client.refresh_oauth_token() {
+                        tracing::error!("Failed to request a new access token with error: {err}");
+                        if let Err(err) = tx.send(Response::Error(err.into())) {
+                            tracing::error!(
+                                "Failed to send error message to main thread with error: {err}"
+                            );
+                        }
+                        return; // Nothing else to do, quit thread
+                    }
+                    match client.authenticate() {
+                        Ok(authenticated) => authenticated,
+                        Err((err, _)) => {
+                            tracing::error!(
+                                "Failed to authenticate using password with error: {err}"
+                            );
+                            if let Err(err) = tx.send(Response::Error(err.into())) {
+                                tracing::error!(
+                                    "Failed to send error message to main thread with error: {err}"
+                                );
+                            }
+                            return; // Nothing else to do, quit thread
+                        }
+                    }
+                }
+            }
+        }
     };
 
     loop {
