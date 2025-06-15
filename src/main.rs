@@ -271,7 +271,7 @@ fn run_tui(
                                     tracing::warn!("Selected non-existing email, ignoring command");
                                     continue;
                                 };
-                                tracing::debug!("{parsed_email:?}");
+                                tracing::debug!("Parsed: {parsed_email:?}");
                                 screen = Screen::Reading(ReadingWidget::from(parsed_email.clone()));
                                 // We've handled what there is to handle, don't handle at the widget level
                                 continue;

@@ -23,10 +23,10 @@ impl<'w> BodyWidget<'w> {
         }
     }
 
-    pub fn with_contents(contents: String) -> Self {
+    pub fn with_contents(contents: Vec<String>) -> Self {
         Self {
             textarea: {
-                let mut textarea = TextArea::new(vec![contents]);
+                let mut textarea = TextArea::new(contents);
                 textarea.set_cursor_line_style(Style::default());
                 // textarea.set_placeholder_text("john.doe@kagi.com");
                 textarea.set_block(Block::default().borders(Borders::ALL).title("Body"));

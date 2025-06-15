@@ -6,11 +6,11 @@ use ratatui::{
 
 use crate::{
     tui::{
-        address::LineWidget,
         body::BodyWidget,
         combo::KeyCombo,
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
+        line::LineWidget,
     },
     Action,
 };

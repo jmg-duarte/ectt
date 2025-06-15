@@ -7,16 +7,61 @@ use ratatui::{
 use crate::{
     imap::ParsedEmail,
     tui::{
-        address::LineWidget,
         body::BodyWidget,
         combo::KeyCombo,
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
+        line::LineWidget,
     },
     Action, Page,
 };
+
+#[derive(Debug, PartialEq, Eq)]
+enum Focus {
+    From,
+    Cc,
+    Bcc,
+    Subject,
+    Body,
+}
+
+impl Focus {
+    fn next(&mut self, cc_is_empty: bool, bcc_is_empty: bool) {
+        match (self, cc_is_empty, bcc_is_empty) {
+            (self_ @ Focus::From, false, _) => {
+                *self_ = Focus::Cc;
+            }
+            (self_ @ Focus::From, true, false) => {
+                *self_ = Focus::Bcc;
+            }
+            (self_ @ Focus::From, true, true) => *self_ = Focus::Subject,
+
+            (self_ @ Focus::Cc, _, true) => *self_ = Focus::Subject,
+            (self_ @ Focus::Cc, _, false) => *self_ = Focus::Bcc,
+            (self_ @ Focus::Bcc, _, _) => *self_ = Focus::Subject,
+            (self_ @ Focus::Subject, _, _) => *self_ = Focus::Body,
+            (self_ @ Focus::Body, _, _) => *self_ = Focus::From,
+        }
+    }
+
+    fn previous(&mut self, cc_is_empty: bool, bcc_is_empty: bool) {
+        match (self, cc_is_empty, bcc_is_empty) {
+            (self_ @ Focus::From, _, _) => {
+                *self_ = Focus::Body;
+            }
+            (self_ @ Focus::Cc, _, _) => *self_ = Focus::From,
+            (self_ @ Focus::Bcc, false, _) => *self_ = Focus::From,
+            (self_ @ Focus::Bcc, true, _) => *self_ = Focus::Cc,
+            (self_ @ Focus::Subject, _, false) => *self_ = Focus::Bcc,
+            (self_ @ Focus::Subject, false, true) => *self_ = Focus::Cc,
+            (self_ @ Focus::Subject, true, true) => *self_ = Focus::From,
+            (self_ @ Focus::Body, _, _) => *self_ = Focus::Subject,
+        }
+    }
+}
+
 pub struct ReadingWidget<'w> {
-    focused: usize, // 0: to, 1: cc, 2: bcc, 3: body
+    focused: Focus,
 
     to: LineWidget<'w>,
     cc: LineWidget<'w>,
@@ -35,18 +80,18 @@ impl ReadingWidget<'_> {
         body: String,
     ) -> Self {
         Self {
-            to: {
-                let mut widget = LineWidget::with_contents("From", from);
-                // ensure its focused on the first render
-                widget.focused();
-                widget
-            },
-            cc: LineWidget::with_contents("Cc", cc.join(", ")),
-            bcc: LineWidget::with_contents("Bcc", bcc.join(", ")),
-            subject: LineWidget::with_contents("Subject", subject),
-            body: BodyWidget::with_contents(body),
+            to: LineWidget::with_contents("From", vec![from]),
+            cc: LineWidget::with_contents("Cc", cc),
+            bcc: LineWidget::with_contents("Bcc", bcc),
+            subject: LineWidget::with_contents("Subject", vec![subject]),
+            body: BodyWidget::with_contents(
+                body.replace("\r", "")
+                    .split("\n")
+                    .map(ToString::to_string)
+                    .collect(),
+            ),
             help: Self::help(),
-            focused: Default::default(),
+            focused: Focus::From,
         }
     }
 }
@@ -86,17 +131,20 @@ impl<'w> ReadingWidget<'w> {
             code, modifiers, ..
         }: KeyEvent,
     ) -> Action {
+        tracing::debug!("{:?}", self.cc.as_ref());
+
+        let cc_is_empty = self.cc.as_ref().lines().is_empty() || self.cc.as_ref().is_empty();
+        let bcc_is_empty = self.bcc.as_ref().lines().is_empty() || self.cc.as_ref().is_empty();
+
         match (code, modifiers) {
-            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(Page::Inbox),
+            (crossterm::event::KeyCode::Esc, _) => return Action::GoTo(Page::Inbox),
             (crossterm::event::KeyCode::Tab, _) => {
-                self.focused = (self.focused + 1) % 4;
+                self.focused.next(cc_is_empty, bcc_is_empty);
                 self.update_focused();
-                Action::Tick
             }
             (crossterm::event::KeyCode::BackTab, _) => {
-                self.focused = (self.focused + 3) % 4;
+                self.focused.previous(cc_is_empty, bcc_is_empty);
                 self.update_focused();
-                Action::Tick
             }
             (crossterm::event::KeyCode::Char(_), _)
             | (crossterm::event::KeyCode::Backspace, _)
@@ -104,26 +152,30 @@ impl<'w> ReadingWidget<'w> {
                 // Ignore editing inputs
                 // this could be placed in the underlying component too but
                 // the logic there would become more complicated, here is good enough
-                Action::Tick
             }
             _ => {
                 match self.focused {
-                    0 => self.to.input(event),
-                    1 => self.cc.input(event),
-                    2 => self.bcc.input(event),
-                    3 => self.body.as_mut().input(event),
-                    _ => unreachable!(),
+                    Focus::From => self.to.input(event),
+                    Focus::Cc => self.cc.input(event),
+                    Focus::Bcc => self.bcc.input(event),
+                    Focus::Subject => self.subject.input(event),
+                    Focus::Body => self.body.as_mut().input(event),
                 };
-                Action::Tick
             }
         }
+        Action::Tick
     }
 
     fn update_focused(&mut self) {
-        let parts: [&mut dyn FocusStyle; 4] =
-            [&mut self.to, &mut self.cc, &mut self.bcc, &mut self.body];
-        for (idx, focusable) in parts.into_iter().enumerate() {
-            if idx == self.focused {
+        let parts: [(Focus, &mut dyn FocusStyle); 5] = [
+            (Focus::From, &mut self.to),
+            (Focus::Cc, &mut self.cc),
+            (Focus::Bcc, &mut self.bcc),
+            (Focus::Subject, &mut self.subject),
+            (Focus::Body, &mut self.body),
+        ];
+        for (focus, focusable) in parts.into_iter() {
+            if self.focused == focus {
                 focusable.focused();
             } else {
                 focusable.unfocused();
@@ -134,23 +186,72 @@ impl<'w> ReadingWidget<'w> {
 
 impl<'w> Widget for &ReadingWidget<'w> {
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Length(3),
-                Constraint::Min(5),
-                Constraint::Length(1),
-            ])
-            .split(area);
+        let mut constraints = vec![Constraint::Length(3)];
 
-        self.to.render(chunks[0], buf);
-        self.cc.render(chunks[1], buf);
-        self.bcc.render(chunks[2], buf);
-        self.subject.render(chunks[3], buf);
-        self.body.render(chunks[4], buf);
-        self.help.render(chunks[5], buf);
+        let layout = Layout::default().direction(Direction::Vertical);
+
+        // TextArea.is_empty() is not very clear, it will write an empty line behind your back sometimes
+        // https://github.com/rhysd/tui-textarea/issues/107
+        let cc_is_empty = self.cc.as_ref().lines().is_empty() || self.cc.as_ref().is_empty();
+        let bcc_is_empty = self.bcc.as_ref().lines().is_empty() || self.cc.as_ref().is_empty();
+
+        match (cc_is_empty, bcc_is_empty) {
+            (false, false) => {
+                constraints.extend_from_slice(&[
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Min(5),
+                    Constraint::Length(1),
+                ]);
+                let chunks = layout.constraints(constraints).split(area);
+                self.to.render(chunks[0], buf);
+                self.cc.render(chunks[1], buf);
+                self.bcc.render(chunks[2], buf);
+                self.subject.render(chunks[3], buf);
+                self.body.render(chunks[4], buf);
+                self.help.render(chunks[5], buf);
+            }
+            (false, true) => {
+                constraints.extend_from_slice(&[
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Min(5),
+                    Constraint::Length(1),
+                ]);
+                let chunks = layout.constraints(constraints).split(area);
+                self.to.render(chunks[0], buf);
+                self.cc.render(chunks[1], buf);
+                self.subject.render(chunks[2], buf);
+                self.body.render(chunks[3], buf);
+                self.help.render(chunks[4], buf);
+            }
+            (true, false) => {
+                constraints.extend_from_slice(&[
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Min(5),
+                    Constraint::Length(1),
+                ]);
+                let chunks = layout.constraints(constraints).split(area);
+                self.to.render(chunks[0], buf);
+                self.bcc.render(chunks[1], buf);
+                self.subject.render(chunks[2], buf);
+                self.body.render(chunks[3], buf);
+                self.help.render(chunks[4], buf);
+            }
+            (true, true) => {
+                constraints.extend_from_slice(&[
+                    Constraint::Length(3),
+                    Constraint::Min(5),
+                    Constraint::Length(1),
+                ]);
+                let chunks = layout.constraints(constraints).split(area);
+                self.to.render(chunks[0], buf);
+                self.subject.render(chunks[1], buf);
+                self.body.render(chunks[2], buf);
+                self.help.render(chunks[3], buf);
+            }
+        }
     }
 }

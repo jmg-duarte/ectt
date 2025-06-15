@@ -1,10 +1,10 @@
-pub mod address;
 pub mod body;
 pub mod combo;
 pub mod compose;
 pub mod focus;
 pub mod help;
 pub mod inbox;
+pub mod line;
 pub mod loading;
 pub mod login;
 pub mod reading;
