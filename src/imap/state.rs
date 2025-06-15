@@ -10,35 +10,24 @@ use oauth2::{
     HttpClientError, TokenResponse,
 };
 
-use crate::config::{Auth, ImapConfig, OAuthConfig};
+use crate::{
+    config::{Auth, ImapConfig, OAuthConfig},
+    imap::{OAuthConfigWithUser, ParsedEmail},
+};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParsedEmail {
-    pub date: DateTime<Utc>,
-    pub from: String,
-    pub cc: Vec<String>,
-    pub bcc: Vec<String>,
-    pub subject: String,
-    pub body: String,
-}
-
-pub enum ReadMessage {
-    ReadInbox { count: u32, offset: u32 },
-}
-
-pub enum Response {
-    Inbox(Vec<ParsedEmail>),
-
-    Error(crate::Error),
-}
-
-struct UnauthenticatedState {
-    config: ImapConfig,
-    client: imap::Client<Connection>,
+pub struct UnauthenticatedState {
+    pub config: ImapConfig,
+    pub client: imap::Client<Connection>,
 }
 
 impl UnauthenticatedState {
-    fn authenticate(self) -> Result<AuthenticatedState, (imap::Error, Self)> {
+    pub fn new(config: ImapConfig) -> Result<Self, crate::Error> {
+        let ImapConfig { ref host, port, .. } = config;
+        let client = imap::ClientBuilder::new(host.clone(), port).connect()?;
+        Ok(UnauthenticatedState { config, client })
+    }
+
+    pub fn authenticate(self) -> Result<AuthenticatedState, (imap::Error, Self)> {
         match &self.config.auth {
             Auth::Password(password_config) => {
                 let login = self.config.login.clone();
@@ -73,7 +62,7 @@ impl UnauthenticatedState {
         }
     }
 
-    fn refresh_oauth_token(
+    pub fn refresh_oauth_token(
         &mut self,
     ) -> Result<(), BasicRequestTokenError<HttpClientError<Error>>> {
         let Auth::OAuth(ref mut config) = self.config.auth else {
@@ -101,12 +90,12 @@ impl UnauthenticatedState {
     }
 }
 
-struct AuthenticatedState {
+pub struct AuthenticatedState {
     session: imap::Session<Connection>,
 }
 
 impl AuthenticatedState {
-    fn read_inbox(&mut self, count: u32, offset: u32) -> Vec<ParsedEmail> {
+    pub fn read_inbox(&mut self, count: u32, offset: u32) -> Vec<ParsedEmail> {
         self.session.select("INBOX").unwrap();
         // Fetch the 20 most recent emails by getting the highest UID and fetching the last 20
         let uids = self.session.uid_search("ALL").unwrap();
@@ -171,7 +160,7 @@ impl AuthenticatedState {
         parsed_emails
     }
 
-    fn get_from(parsed: &mail_parser::Message) -> String {
+    pub fn get_from(parsed: &mail_parser::Message) -> String {
         let from = match parsed.from() {
             Some(from) => from,
             None => return "No sender".to_string(),
@@ -190,7 +179,7 @@ impl AuthenticatedState {
         }
     }
 
-    fn get_cc(parsed: &mail_parser::Message) -> Vec<String> {
+    pub fn get_cc(parsed: &mail_parser::Message) -> Vec<String> {
         let cc = match parsed.cc() {
             Some(cc) => cc,
             None => return vec![],
@@ -209,7 +198,7 @@ impl AuthenticatedState {
             .collect::<Vec<_>>()
     }
 
-    fn get_bcc(parsed: &mail_parser::Message) -> Vec<String> {
+    pub fn get_bcc(parsed: &mail_parser::Message) -> Vec<String> {
         let bcc = match parsed.bcc() {
             Some(bcc) => bcc,
             None => return vec![],
@@ -226,94 +215,5 @@ impl AuthenticatedState {
                 (Some(name), Some(address)) => format!("{name} ({address})"),
             })
             .collect::<Vec<_>>()
-    }
-}
-
-#[tracing::instrument(skip_all)]
-pub fn imap_thread(config: ImapConfig, rx: Receiver<ReadMessage>, tx: Sender<Response>) {
-    let ImapConfig { host, port, .. } = config.clone();
-    let state = UnauthenticatedState {
-        config,
-        client: imap::ClientBuilder::new(host, port).connect().unwrap(),
-    };
-
-    let mut state = match state.authenticate() {
-        Ok(state) => state,
-        Err((err, mut client)) => {
-            match client.config.auth {
-                Auth::Password(_) => {
-                    tracing::error!("Failed to authenticate using password with error: {err}");
-                    if let Err(err) = tx.send(Response::Error(err.into())) {
-                        tracing::error!(
-                            "Failed to send error message to main thread with error: {err}"
-                        )
-                    };
-                    return; // Nothing else to do, quit thread
-                }
-                Auth::OAuth(_) => {
-                    if let Err(err) = client.refresh_oauth_token() {
-                        tracing::error!("Failed to request a new access token with error: {err}");
-                        if let Err(err) = tx.send(Response::Error(err.into())) {
-                            tracing::error!(
-                                "Failed to send error message to main thread with error: {err}"
-                            );
-                        }
-                        return; // Nothing else to do, quit thread
-                    }
-                    match client.authenticate() {
-                        Ok(authenticated) => authenticated,
-                        Err((err, _)) => {
-                            tracing::error!(
-                                "Failed to authenticate using password with error: {err}"
-                            );
-                            if let Err(err) = tx.send(Response::Error(err.into())) {
-                                tracing::error!(
-                                    "Failed to send error message to main thread with error: {err}"
-                                );
-                            }
-                            return; // Nothing else to do, quit thread
-                        }
-                    }
-                }
-            }
-        }
-    };
-
-    loop {
-        let message = match rx.recv() {
-            Ok(message) => message,
-            Err(err) => {
-                tracing::error!("Error while receiving a message from main thread: {err}");
-                break;
-            }
-        };
-
-        match message {
-            ReadMessage::ReadInbox { count, offset } => {
-                let emails = state.read_inbox(count, offset);
-                if let Err(err) = tx.send(Response::Inbox(emails)) {
-                    tracing::error!(
-                        "Failed to send inbox response to main thread with error: {err}"
-                    );
-                    break;
-                }
-            }
-        }
-    }
-}
-
-struct OAuthConfigWithUser<'a> {
-    user: &'a str,
-    config: &'a OAuthConfig,
-}
-
-impl imap::Authenticator for OAuthConfigWithUser<'_> {
-    type Response = String;
-    fn process(&self, _: &[u8]) -> Self::Response {
-        format!(
-            "user={}\x01auth=Bearer {}\x01\x01",
-            self.user,
-            self.config.access_token.secret(),
-        )
     }
 }
