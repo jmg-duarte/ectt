@@ -1,4 +1,3 @@
-use std::sync::mpsc::{Receiver, Sender};
 
 use chrono::{DateTime, Utc};
 use imap::Connection;
@@ -11,7 +10,7 @@ use oauth2::{
 };
 
 use crate::{
-    config::{Auth, ImapConfig, OAuthConfig},
+    config::{Auth, ImapConfig},
     imap::{OAuthConfigWithUser, ParsedEmail},
 };
 

@@ -12,8 +12,8 @@ use crate::{
     tui::{
         combo::KeyCombo,
         help::{HasHelp, HelpWidget},
+        Action, Page,
     },
-    Action, Page,
 };
 
 pub struct InboxState {

@@ -4,12 +4,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
-use crate::{
-    tui::{
-        combo::KeyCombo,
-        help::{HasHelp, HelpWidget},
-    },
-    Action,
+use crate::tui::{
+    combo::KeyCombo,
+    help::{HasHelp, HelpWidget},
+    Action, Page,
 };
 
 pub struct LoginWidget<'w> {
@@ -41,7 +39,7 @@ impl<'w> LoginWidget<'w> {
     ) -> Action {
         match (code, modifiers) {
             (KeyCode::Esc, _) => Action::Quit,
-            (KeyCode::Enter, _) => Action::GoTo(crate::Page::Inbox),
+            (KeyCode::Enter, _) => Action::GoTo(Page::Inbox),
             _ => {
                 // TODO: solve this later, we need to advance the status
                 Action::Tick

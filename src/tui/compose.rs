@@ -4,15 +4,13 @@ use ratatui::{
     widgets::Widget,
 };
 
-use crate::{
-    tui::{
-        body::BodyWidget,
-        combo::KeyCombo,
-        focus::FocusStyle,
-        help::{HasHelp, HelpWidget},
-        line::LineWidget,
-    },
-    Action,
+use crate::tui::{
+    body::BodyWidget,
+    combo::KeyCombo,
+    focus::FocusStyle,
+    help::{HasHelp, HelpWidget},
+    line::LineWidget,
+    Action, Page,
 };
 
 pub struct ComposeWidget<'w> {
@@ -76,9 +74,9 @@ impl<'w> ComposeWidget<'w> {
         match (code, modifiers) {
             (crossterm::event::KeyCode::Char('s'), event::KeyModifiers::CONTROL) => {
                 // TODO: send email
-                Action::GoTo(crate::Page::Inbox)
+                Action::GoTo(Page::Inbox)
             }
-            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(crate::Page::Inbox),
+            (crossterm::event::KeyCode::Esc, _) => Action::GoTo(Page::Inbox),
             (crossterm::event::KeyCode::Tab, _) => {
                 self.focused = (self.focused + 1) % 4;
                 self.update_focused();

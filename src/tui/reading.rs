@@ -12,8 +12,8 @@ use crate::{
         focus::FocusStyle,
         help::{HasHelp, HelpWidget},
         line::LineWidget,
+        Action, Page,
     },
-    Action, Page,
 };
 
 #[derive(Debug, PartialEq, Eq)]
