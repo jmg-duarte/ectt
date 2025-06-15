@@ -1,13 +1,15 @@
 use std::sync::mpsc::{Receiver, Sender};
 
+use chrono::{DateTime, TimeZone, Utc};
 use imap::{Client, Connection, Session};
-use mailparse::{parse_header, parse_headers, parse_mail, MailHeader, MailHeaderMap};
+use mailparse::{dateparse, parse_header, parse_headers, parse_mail, MailHeader, MailHeaderMap};
 use oauth2::url::form_urlencoded::parse;
 
 use crate::config::{Auth, ImapConfig, OAuthConfig, PasswordConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedEmail {
+    pub date: DateTime<Utc>,
     pub from: String,
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
@@ -81,40 +83,56 @@ impl AuthenticatedState {
 
         let messages = self
             .session
-            .uid_fetch(format!("{bot}:{top}"), "RFC822")
+            .uid_fetch(
+                format!("{bot}:{top}"),
+                "(UID INTERNALDATE RFC822 RFC822.TEXT)",
+            )
             .unwrap();
 
-        messages
-            .iter()
-            .filter_map(
-                |message: &imap::types::Fetch<'_>| match message.body().map(parse_mail) {
-                    Some(Ok(parsed)) => Some(parsed),
-                    Some(Err(err)) => {
-                        tracing::error!("Failed to parse email with error: {err}");
-                        None
-                    }
-                    None => {
-                        tracing::error!("Message does not have a body");
-                        None
-                    }
-                },
-            )
-            .map(|parsed| {
-                let headers = parsed.get_headers();
+        let mut parsed_emails = Vec::with_capacity(messages.len());
 
-                tracing::info!("headers: {:?}", headers);
-
-                ParsedEmail {
-                    from: headers.get_first_value("From").unwrap_or_default(),
-                    cc: headers.get_all_values("Cc"),
-                    bcc: headers.get_all_values("Bcc"),
-                    subject: headers
-                        .get_first_value("Subject")
-                        .unwrap_or_else(|| "No subject".to_string()),
-                    body: parsed.get_body().unwrap(),
+        for message in messages.iter() {
+            let parsed = match message.body().map(parse_mail) {
+                Some(Ok(parsed)) => parsed,
+                Some(Err(err)) => {
+                    tracing::error!("Failed to parse email with error: {err}");
+                    continue;
                 }
-            })
-            .collect()
+                None => {
+                    tracing::error!("Message does not have a body");
+                    continue;
+                }
+            };
+
+            let headers = parsed.get_headers();
+            let date = message
+                .internal_date()
+                .map(|internal_date| internal_date.to_utc())
+                .unwrap_or_else(|| {
+                    headers
+                        .get_first_value("Received")
+                        .map(|received| {
+                            chrono::DateTime::from_timestamp(
+                                dateparse(&received).unwrap_or_default(),
+                                0,
+                            )
+                        })
+                        .flatten()
+                        .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH)
+                });
+
+            parsed_emails.push(ParsedEmail {
+                date,
+                from: headers.get_first_value("From").unwrap_or_default(),
+                cc: headers.get_all_values("Cc"),
+                bcc: headers.get_all_values("Bcc"),
+                subject: headers
+                    .get_first_value("Subject")
+                    .unwrap_or_else(|| "No subject".to_string()),
+                body: parsed.get_body().unwrap(),
+            });
+        }
+        parsed_emails
     }
 }
 

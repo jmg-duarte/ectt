@@ -46,9 +46,9 @@ impl<'w> InboxWidget<'w> {
             .into_iter(),
         );
         let widths = &[
-            Constraint::Length(12),
             Constraint::Fill(1),
-            Constraint::Min(20),
+            Constraint::Fill(2),
+            Constraint::Fill(3),
         ];
         let table = Table::new(empty::<Row>(), widths)
             .header(header)
@@ -130,7 +130,7 @@ impl StatefulWidget for &mut InboxWidget<'_> {
         let table = std::mem::take(&mut self.table);
         let table = table.rows(state.inbox.iter().map(|parsed| {
             Row::new(vec![
-                Cell::from(""),
+                Cell::from(parsed.date.clone().to_string()),
                 Cell::from(parsed.from.clone()),
                 Cell::from(parsed.subject.clone()),
             ])

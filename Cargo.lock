@@ -632,6 +632,7 @@ name = "ectt"
 version = "0.0.0"
 dependencies = [
  "axum",
+ "chrono",
  "clap",
  "color-eyre",
  "crossterm",
