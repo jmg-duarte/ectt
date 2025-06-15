@@ -14,6 +14,9 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use mailparse::ParsedMail;
 use oauth2::basic::BasicRequestTokenError;
 use oauth2::{reqwest, HttpClientError};
+use ratatui::layout::Rect;
+use ratatui::style::{Style, Stylize};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget, Wrap};
 use ratatui::DefaultTerminal;
 use std::sync::mpsc::SendError;
 use tracing::Level;
@@ -23,6 +26,7 @@ use crate::config::{get_config_path, load_config, ReadBackend};
 use crate::imap::{imap_thread, ReadMessage, Response};
 use crate::tui::compose::ComposeWidget;
 use crate::tui::inbox::{InboxState, InboxWidget};
+use crate::tui::loading::LoadingPopup;
 use crate::tui::reading::ReadingWidget;
 use crate::{cli::App, oauth::execute_authentication_flow};
 
@@ -230,7 +234,11 @@ fn run_tui(
 
         terminal.draw(|f| match &mut screen {
             Screen::Inbox(widget) => {
-                f.render_stateful_widget(widget, f.area(), &mut state.inbox_state)
+                f.render_stateful_widget(widget, f.area(), &mut state.inbox_state);
+
+                if state.request_inflight {
+                    f.render_widget(LoadingPopup, f.area());
+                }
             }
             Screen::Compose(widget) => f.render_widget(&*widget, f.area()),
             Screen::Reading(widget) => f.render_widget(&*widget, f.area()),

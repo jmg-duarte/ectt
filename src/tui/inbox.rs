@@ -97,6 +97,7 @@ impl<'w> HasHelp for InboxWidget<'w> {
     fn help<'h>() -> HelpWidget<'h> {
         HelpWidget::new(vec![
             (KeyCombo::new().with_code(KeyCode::Enter), "Read email"),
+            (KeyCombo::new().with_code(KeyCode::Down), "Load more"),
             (
                 KeyCombo::new()
                     .with_code(KeyCode::Char('n'))
