@@ -1,6 +1,6 @@
 pub mod state;
 use crate::{
-    config::{Auth, ImapConfig, OAuthConfig},
+    config::{ImapConfig, OAuthConfig},
     imap::state::UnauthenticatedState,
 };
 use chrono::{DateTime, Utc};
@@ -16,58 +16,25 @@ pub struct ParsedEmail {
     pub body: String,
 }
 
-pub enum ReadMessage {
+pub enum Command {
     ReadInbox { count: u32, offset: u32 },
 }
 
 pub enum Response {
     Inbox(Vec<ParsedEmail>),
-
     Error(crate::Error),
 }
 
 #[tracing::instrument(skip_all)]
-pub fn imap_thread(config: ImapConfig, rx: Receiver<ReadMessage>, tx: Sender<Response>) {
+pub fn imap_thread(config: ImapConfig, rx: Receiver<Command>, tx: Sender<Response>) {
     let state = UnauthenticatedState::new(config).unwrap();
     let mut state = match state.authenticate() {
         Ok(state) => state,
-        Err((err, mut client)) => {
-            match client.config.auth {
-                Auth::Password(_) => {
-                    tracing::error!("Failed to authenticate using password with error: {err}");
-                    if let Err(err) = tx.send(Response::Error(err.into())) {
-                        tracing::error!(
-                            "Failed to send error message to main thread with error: {err}"
-                        )
-                    };
-                    return; // Nothing else to do, quit thread
-                }
-                Auth::OAuth(_) => {
-                    if let Err(err) = client.refresh_oauth_token() {
-                        tracing::error!("Failed to request a new access token with error: {err}");
-                        if let Err(err) = tx.send(Response::Error(err.into())) {
-                            tracing::error!(
-                                "Failed to send error message to main thread with error: {err}"
-                            );
-                        }
-                        return; // Nothing else to do, quit thread
-                    }
-                    match client.authenticate() {
-                        Ok(authenticated) => authenticated,
-                        Err((err, _)) => {
-                            tracing::error!(
-                                "Failed to authenticate using password with error: {err}"
-                            );
-                            if let Err(err) = tx.send(Response::Error(err.into())) {
-                                tracing::error!(
-                                    "Failed to send error message to main thread with error: {err}"
-                                );
-                            }
-                            return; // Nothing else to do, quit thread
-                        }
-                    }
-                }
-            }
+        Err((err, _)) => {
+            if let Err(err) = tx.send(Response::Error(err.into())) {
+                tracing::error!("Failed to send error message to main thread with error: {err}");
+            };
+            return; // Nothing left to do since authenticate already tries to refresh the token
         }
     };
 
@@ -81,7 +48,7 @@ pub fn imap_thread(config: ImapConfig, rx: Receiver<ReadMessage>, tx: Sender<Res
         };
 
         match message {
-            ReadMessage::ReadInbox { count, offset } => {
+            Command::ReadInbox { count, offset } => {
                 let emails = state.read_inbox(count, offset);
                 if let Err(err) = tx.send(Response::Inbox(emails)) {
                     tracing::error!(

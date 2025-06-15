@@ -1,5 +1,5 @@
-
 use chrono::{DateTime, Utc};
+use color_eyre::owo_colors::OwoColorize;
 use imap::Connection;
 use itertools::Itertools;
 use mail_parser::MessageParser;
@@ -26,7 +26,34 @@ impl UnauthenticatedState {
         Ok(UnauthenticatedState { config, client })
     }
 
-    pub fn authenticate(self) -> Result<AuthenticatedState, (imap::Error, Self)> {
+    pub fn authenticate(self) -> Result<AuthenticatedState, (crate::Error, Self)> {
+        let (err, mut client) = match self.basic_authenticate() {
+            Ok(state) => return Ok(state),
+            Err(err) => err,
+        };
+
+        match client.config.auth {
+            Auth::Password(_) => {
+                tracing::error!("Failed to authenticate using password with error: {err}");
+                return Err((err.into(), client));
+            }
+            Auth::OAuth(_) => {
+                if let Err(err) = client.refresh_oauth_token() {
+                    tracing::error!("Failed to request a new access token with error: {err}");
+                    return Err((err.into(), client));
+                }
+                match client.authenticate() {
+                    Ok(authenticated) => Ok(authenticated),
+                    Err((err, client)) => {
+                        tracing::error!("Failed to authenticate using password with error: {err}");
+                        return Err((err.into(), client)); // Nothing else to do, quit thread
+                    }
+                }
+            }
+        }
+    }
+
+    fn basic_authenticate(self) -> Result<AuthenticatedState, (imap::Error, Self)> {
         match &self.config.auth {
             Auth::Password(password_config) => {
                 let login = self.config.login.clone();

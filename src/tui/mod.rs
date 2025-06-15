@@ -16,7 +16,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use ratatui::DefaultTerminal;
 use std::sync::mpsc::SendError;
 
-use crate::imap::{ReadMessage, Response};
+use crate::imap::{Command, Response};
 use crate::tui::compose::ComposeWidget;
 use crate::tui::inbox::{InboxState, InboxWidget};
 use crate::tui::loading::LoadingPopup;
@@ -55,12 +55,12 @@ struct ScreenState {
     inbox_state: InboxState,
     request_inflight: bool,
 
-    to_imap: Sender<ReadMessage>,
+    to_imap: Sender<Command>,
     from_imap: Receiver<Response>,
 }
 
 impl ScreenState {
-    fn new(to_imap: Sender<ReadMessage>, from_imap: Receiver<Response>) -> Self {
+    fn new(to_imap: Sender<Command>, from_imap: Receiver<Response>) -> Self {
         Self {
             inbox_state: InboxState::new(),
             request_inflight: false,
@@ -71,8 +71,8 @@ impl ScreenState {
 }
 
 impl ScreenState {
-    fn load(&mut self) -> Result<(), SendError<ReadMessage>> {
-        self.to_imap.send(ReadMessage::ReadInbox {
+    fn load(&mut self) -> Result<(), SendError<Command>> {
+        self.to_imap.send(Command::ReadInbox {
             count: 5,
             offset: 0,
         })?;
@@ -80,11 +80,11 @@ impl ScreenState {
         Ok(())
     }
 
-    fn load_more(&mut self, count: u32) -> Result<(), SendError<ReadMessage>> {
+    fn load_more(&mut self, count: u32) -> Result<(), SendError<Command>> {
         if !self.request_inflight {
             if let Some(selected) = self.inbox_state.table.selected() {
                 if selected == self.inbox_state.inbox.len() - 1 {
-                    self.to_imap.send(ReadMessage::ReadInbox {
+                    self.to_imap.send(Command::ReadInbox {
                         count,
                         offset: self.inbox_state.inbox.len() as u32,
                     })?;
@@ -99,7 +99,7 @@ impl ScreenState {
 #[tracing::instrument(skip_all)]
 pub fn run(
     mut terminal: DefaultTerminal,
-    to_imap: Sender<ReadMessage>,
+    to_imap: Sender<Command>,
     from_imap: Receiver<Response>,
 ) -> Result<(), Error> {
     let mut screen = Screen::from(Page::Inbox);

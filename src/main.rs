@@ -13,7 +13,7 @@ use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::config::{get_config_path, load_config, ReadBackend};
-use crate::imap::{imap_thread, ReadMessage, Response};
+use crate::imap::imap_thread;
 use crate::{cli::App, oauth::execute_authentication_flow};
 
 #[derive(Debug, thiserror::Error)]
@@ -80,8 +80,8 @@ fn main() -> Result<(), Error> {
 }
 
 fn run(ReadBackend::Imap(config): ReadBackend) -> Result<(), Error> {
-    let (to_imap, from_main) = channel::<ReadMessage>();
-    let (to_main, from_imap) = channel::<Response>();
+    let (to_imap, from_main) = channel::<imap::Command>();
+    let (to_main, from_imap) = channel::<imap::Response>();
 
     let imap_thread = std::thread::spawn(|| {
         tracing::debug!("Launching IMAP thread");
