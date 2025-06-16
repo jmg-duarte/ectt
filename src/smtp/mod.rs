@@ -127,6 +127,7 @@ impl Client {
         };
 
         let transport = SmtpTransport::relay(&config.host)?
+            .port(config.port)
             .authentication(vec![Mechanism::Plain])
             .credentials(credentials)
             .build();
