@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Run cargo check
+        run: cargo check --all --all-targets
+      - name: Run clippy (no-deps)
+        run: cargo clippy --all --all-targets -- -D warnings --no-deps
