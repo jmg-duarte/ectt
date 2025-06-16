@@ -10,9 +10,24 @@ Read and send emails from your CLI.
 cargo b -r
 ```
 
+## Run
+
+```
+cargo r -r -- run
+# or
+ectt run
+```
+
+
 ## Configuration
 
 eCTT's configuration is based on `himalaya`'s configuration, however, we're using JSON instead of TOML and we support less options.
+
+The configuration can be placed under `<OS configuration folder>/ectt/config.json`,
+the directory from which eCTT is launched, or specified using the `--config <file>` flag.
+
+> NOTE: eCTT will output some logs to the `<OS configuration folder>/ectt/config.json`,
+> these should only contain ERROR logs, however you should be able to change this using
 
 ### IMAP
 
@@ -259,3 +274,7 @@ After setting both IMAP and SMTP, your file should look like this:
 }
 
 ```
+
+#### Known Bugs
+
+* When loading messages from the provider, if the message has no subject and no body, no more messages after it will load.

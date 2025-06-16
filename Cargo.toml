@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = []
 refresher = ["tokio", "tokio-util", "futures", "axum"]
+disable-logging = []
 
 [dependencies]
 imap = { version = "3.0.0-alpha.15", default-features = false, features = [

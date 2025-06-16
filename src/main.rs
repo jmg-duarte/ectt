@@ -7,6 +7,8 @@ mod imap;
 mod smtp;
 mod tui;
 
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::mpsc::channel;
 
 use clap::Parser;
@@ -16,7 +18,7 @@ use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 
 use crate::cli::App;
-use crate::config::{get_config_path, Config};
+use crate::config::{ectt_config_dir, get_config_path, Config};
 use crate::imap::config::ReadBackend;
 use crate::imap::imap_thread;
 use crate::smtp::config::SendBackend;
@@ -46,19 +48,28 @@ pub enum Error {
 }
 
 fn setup_logging() -> WorkerGuard {
-    let file_appender = tracing_appender::rolling::hourly("ectt.log", "");
+    let log_file_path = if cfg!(debug_assertions) {
+        PathBuf::from_str("ectt.log").expect("Infallible & regardless, path should be valid")
+    } else {
+        ectt_config_dir()
+            .map(|dir| dir.join("ectt.log"))
+            .unwrap_or_else(|| {
+                PathBuf::from_str("ectt.log")
+                    .expect("Infallible & regardless, path should be valid")
+            })
+    };
+
+    let file_appender = tracing_appender::rolling::hourly(log_file_path, "");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     tracing_subscriber::fmt()
+        .with_writer(non_blocking)
+        .with_ansi(false)
         .with_env_filter(
             tracing_subscriber::EnvFilter::builder()
                 .with_default_directive(Level::INFO.into())
                 .from_env_lossy(),
         )
-        .with_file(true)
-        .with_line_number(true)
-        .with_writer(non_blocking)
-        .with_ansi(false)
         .init();
 
     _guard

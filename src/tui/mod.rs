@@ -163,7 +163,10 @@ pub fn run(
                     f.render_stateful_widget(widget, f.area(), &mut state.inbox_state);
 
                     if state.request_inflight {
-                        f.render_widget(Popup::new("Loading more emails!".to_string()), f.area());
+                        f.render_widget(
+                            Popup::new("Loading more emails!".to_string(), false),
+                            f.area(),
+                        );
                     }
                 }
                 Screen::Compose(widget) => f.render_widget(&*widget, f.area()),
@@ -171,7 +174,7 @@ pub fn run(
             }
 
             if let Some(error) = &state.popup {
-                f.render_widget(Popup::new(error.to_string()), f.area());
+                f.render_widget(Popup::new(error.to_string(), true), f.area());
             }
         })?;
 

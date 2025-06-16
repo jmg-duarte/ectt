@@ -7,6 +7,10 @@ use serde::Deserialize;
 
 use crate::{imap::config::ReadBackend, smtp::config::SendBackend};
 
+pub fn ectt_config_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|dir| dir.join("ectt"))
+}
+
 pub fn get_config_path<P>(path: Option<P>) -> Result<PathBuf, crate::Error>
 where
     P: AsRef<Path>,
@@ -15,7 +19,7 @@ where
         return Ok(path.as_ref().to_path_buf());
     };
 
-    if let Some(dir) = dirs::config_dir() {
+    if let Some(dir) = ectt_config_dir() {
         let config_file = dir.join("config.json");
         if config_file.exists() {
             return Ok(config_file);

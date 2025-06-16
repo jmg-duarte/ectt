@@ -139,9 +139,7 @@ impl AuthenticatedState {
         )?;
 
         let mut parsed_emails = Vec::with_capacity(messages.len());
-
         let parser = MessageParser::new();
-
         for message in messages.iter() {
             let Some(body) = message.body() else {
                 tracing::warn!("Email does not contain a body, ignoring");

@@ -17,7 +17,7 @@ impl<'w> LineWidget<'w> {
             textarea: {
                 let mut textarea = TextArea::default();
                 textarea.set_cursor_line_style(Style::default());
-                // textarea.set_placeholder_text("john.doe@kagi.com");
+                // textarea.set_placeholder_text("john.doe@example.com");
                 textarea.set_block(Block::default().borders(Borders::ALL).title(title));
                 textarea
             },
@@ -29,7 +29,6 @@ impl<'w> LineWidget<'w> {
             textarea: {
                 let mut textarea = TextArea::new(contents);
                 textarea.set_cursor_line_style(Style::default());
-                // textarea.set_placeholder_text("john.doe@kagi.com");
                 textarea.set_block(Block::default().borders(Borders::ALL).title(title));
                 textarea
             },

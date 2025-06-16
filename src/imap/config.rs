@@ -79,7 +79,7 @@ mod test {
             "type": "imap",
             "host": "imap.example.com",
             "port": 993,
-            "login": "jose@kagi.com",
+            "login": "jose@example.com",
             "auth": {
                 "type": "password",
                 "raw": "super-secret"
@@ -94,7 +94,7 @@ mod test {
 
         assert_eq!(host, "imap.example.com".to_string());
         assert_eq!(port, 993);
-        assert_eq!(login, "jose@kagi.com");
+        assert_eq!(login, "jose@example.com");
         // Defer the auth to the other tests
         assert!(matches!(auth, Auth::Password { .. }));
     }
@@ -105,7 +105,7 @@ mod test {
             "type": "imap",
             "host": "imap.example.com",
             "port": 993,
-            "login": "jose@kagi.com",
+            "login": "jose@example.com",
             "auth": {
                 "type": "oauth",
                 "client_id": "client-id",
@@ -125,7 +125,7 @@ mod test {
 
         assert_eq!(host, "imap.example.com".to_string());
         assert_eq!(port, 993);
-        assert_eq!(login, "jose@kagi.com");
+        assert_eq!(login, "jose@example.com");
         // Defer the auth to the other tests
         assert!(matches!(auth, Auth::OAuth { .. }));
     }
