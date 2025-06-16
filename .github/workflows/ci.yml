@@ -16,9 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Rust
-        uses: actions/setup-rust@v1
-        with:
-          rust-version: stable
+        uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run cargo check
