@@ -38,3 +38,8 @@ axum = { version = "0.8.4", features = ["macros"], optional = true }
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1.0.104" }
+
+[lints.clippy]
+result_large_err = "allow"
+large_enum_variant = "allow"
+new_without_default = "allow"

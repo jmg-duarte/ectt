@@ -20,7 +20,6 @@ pub struct InboxState {
     pub inbox: Vec<ParsedEmail>,
     pub table: TableState,
 }
-
 impl InboxState {
     pub fn new() -> Self {
         Self {
@@ -34,17 +33,13 @@ pub struct InboxWidget<'w> {
     table: Table<'w>,
     help: HelpWidget<'w>,
 }
-
 impl<'w> InboxWidget<'w> {
     pub fn new() -> Self {
-        let header = Row::new(
-            [
-                Cell::from("Date"),
-                Cell::from("Author"),
-                Cell::from("Title"),
-            ]
-            .into_iter(),
-        );
+        let header = Row::new([
+            Cell::from("Date"),
+            Cell::from("Author"),
+            Cell::from("Title"),
+        ]);
         let widths = &[
             Constraint::Fill(1),
             Constraint::Fill(2),

@@ -9,7 +9,7 @@ pub mod login;
 pub mod popup;
 pub mod reading;
 
-use std::io::{self, ErrorKind};
+use std::io::{self};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
@@ -113,7 +113,7 @@ pub fn run(
 
     state
         .load()
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "IMAP channel got disconnected"))?;
+        .map_err(|_| io::Error::other("IMAP channel got disconnected"))?;
 
     loop {
         match state.from_imap.try_recv() {
@@ -130,8 +130,7 @@ pub fn run(
             Err(TryRecvError::Disconnected) => {
                 tracing::error!("IMAP channel disconnected");
                 tracing::error!("Exiting...");
-                return Err(Error::Io(std::io::Error::new(
-                    ErrorKind::Other,
+                return Err(Error::Io(std::io::Error::other(
                     "IMAP channel got disconnected",
                 )));
             }
@@ -152,8 +151,7 @@ pub fn run(
             Err(TryRecvError::Disconnected) => {
                 tracing::error!("IMAP channel disconnected");
                 tracing::error!("Exiting...");
-                return Err(Error::Io(std::io::Error::new(
-                    ErrorKind::Other,
+                return Err(Error::Io(std::io::Error::other(
                     "IMAP channel got disconnected",
                 )));
             }
@@ -233,35 +231,32 @@ pub fn run(
                     widget.handle_event(event, &mut state.inbox_state)
                 }
                 Screen::Compose(widget) => {
-                    match event {
-                        Event::Key(KeyEvent {
-                            code: KeyCode::Char('s'),
-                            modifiers: KeyModifiers::CONTROL,
-                            ..
-                        }) => {
-                            match widget.get_partial_message() {
-                                Ok(message) => {
-                                    match to_smtp.send(smtp::Command::SendMail(message)) {
-                                        Ok(_) => {
-                                            screen = Screen::Inbox(InboxWidget::new());
-                                            state.popup =
-                                                Some("Successfully sent email!".to_string());
-                                        }
-                                        Err(err) => {
-                                            tracing::error!("Failed to send message to SMTP thread with error: {err}");
-                                            break Ok(());
-                                        }
-                                    };
-                                    // Do not pass command to the widget
-                                }
-                                Err(err) => {
-                                    state.popup = Some(err.to_string());
-                                }
+                    if let Event::Key(KeyEvent {
+                        code: KeyCode::Char('s'),
+                        modifiers: KeyModifiers::CONTROL,
+                        ..
+                    }) = event
+                    {
+                        match widget.get_partial_message() {
+                            Ok(message) => {
+                                match to_smtp.send(smtp::Command::SendMail(message)) {
+                                    Ok(_) => {
+                                        screen = Screen::Inbox(InboxWidget::new());
+                                        state.popup = Some("Successfully sent email!".to_string());
+                                    }
+                                    Err(err) => {
+                                        tracing::error!("Failed to send message to SMTP thread with error: {err}");
+                                        break Ok(());
+                                    }
+                                };
+                                // Do not pass command to the widget
                             }
-
-                            continue;
+                            Err(err) => {
+                                state.popup = Some(err.to_string());
+                            }
                         }
-                        _ => {}
+
+                        continue;
                     }
 
                     widget.handle_event(event)

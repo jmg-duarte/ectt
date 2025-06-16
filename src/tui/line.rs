@@ -40,7 +40,7 @@ impl<'w> LineWidget<'w> {
         match code {
             crossterm::event::KeyCode::Enter => {
                 // ignore enter because we don't support newlines here
-                return false;
+                false
             }
             _ => self.textarea.input(event),
         }

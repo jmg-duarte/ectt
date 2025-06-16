@@ -37,7 +37,7 @@ impl UnauthenticatedState {
         match client.config.auth {
             Auth::Password(_) => {
                 tracing::error!("Failed to authenticate using password with error: {err}");
-                return Err((err.into(), client));
+                Err((err.into(), client))
             }
             Auth::OAuth(_) => {
                 if let Err(err) = client.refresh_oauth_token() {
@@ -48,7 +48,7 @@ impl UnauthenticatedState {
                     Ok(authenticated) => Ok(authenticated),
                     Err((err, client)) => {
                         tracing::error!("Failed to authenticate using password with error: {err}");
-                        return Err((err.into(), client)); // Nothing else to do, quit thread
+                        Err((err, client)) // Nothing else to do, quit thread
                     }
                 }
             }
@@ -73,7 +73,7 @@ impl UnauthenticatedState {
                 }
             }
             Auth::OAuth(oauth_config) => {
-                let authenticator = OAuthConfigWithUser::new(&self.config.login, &oauth_config);
+                let authenticator = OAuthConfigWithUser::new(&self.config.login, oauth_config);
                 match self.client.authenticate("XOAUTH2", &authenticator) {
                     Ok(session) => Ok(AuthenticatedState { session }),
                     Err((err, client)) => Err((
@@ -179,7 +179,6 @@ impl AuthenticatedState {
                 bcc: Self::get_bcc(&parsed),
                 subject: parsed.subject().unwrap_or("No subject").to_string(),
                 body: (0..parsed.text_body_count())
-                    .into_iter()
                     .map(|idx| parsed.body_text(idx).unwrap_or_default().to_string())
                     .join(""),
             });

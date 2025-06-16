@@ -81,7 +81,7 @@ impl<'w> ComposeWidget<'w> {
             .to
             .as_ref()
             .lines()
-            .get(0)
+            .first()
             .map(|s| s.parse::<Address>())
             .transpose()?;
 
@@ -89,7 +89,7 @@ impl<'w> ComposeWidget<'w> {
             .cc
             .as_ref()
             .lines()
-            .get(0)
+            .first()
             .map(|cc| parse_addresses(cc))
             .transpose()?
             .unwrap_or_default();
@@ -98,14 +98,14 @@ impl<'w> ComposeWidget<'w> {
             .bcc
             .as_ref()
             .lines()
-            .get(0)
+            .first()
             .map(|bcc| parse_addresses(bcc))
             .transpose()?
             .unwrap_or_default();
 
-        let subject = self.subject.as_ref().lines().get(0).cloned();
+        let subject = self.subject.as_ref().lines().first().cloned();
 
-        let body = self.body.as_ref().lines().get(0).cloned();
+        let body = self.body.as_ref().lines().first().cloned();
 
         Ok(PartialMessage {
             to,

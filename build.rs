@@ -55,7 +55,6 @@ fn main() {
         }
         Err(err) => {
             println!("cargo::warning=failed to read gapis.creds.json with error: {err}");
-            return;
         }
     }
 }

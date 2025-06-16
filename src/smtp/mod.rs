@@ -27,7 +27,7 @@ pub struct PartialMessage {
 }
 
 impl PartialMessage {
-    pub fn to_message(self, from: Address) -> Result<Message, crate::Error> {
+    fn into_message(self, from: Address) -> Result<Message, crate::Error> {
         let mut builder = Message::builder()
             .from(Mailbox::new(None, from))
             .subject(self.subject.unwrap_or_default())
@@ -127,7 +127,7 @@ impl Client {
     }
 
     pub fn send(&mut self, message: PartialMessage) -> Result<(), crate::Error> {
-        let message = message.to_message(self.config.login.parse::<Address>()?)?;
+        let message = message.into_message(self.config.login.parse::<Address>()?)?;
 
         let Err(err) = self.transport.send(&message) else {
             return Ok(());

@@ -37,7 +37,7 @@ pub fn imap_thread(
     let mut state = match state.authenticate() {
         Ok(state) => state,
         Err((err, _)) => {
-            if let Err(err) = tx.send(Response::Error(err.into())) {
+            if let Err(err) = tx.send(Response::Error(err)) {
                 tracing::error!("Failed to send error message to main thread with error: {err}");
             };
             return Ok(()); // Nothing left to do since authenticate already tries to refresh the token

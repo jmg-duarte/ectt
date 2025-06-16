@@ -136,10 +136,7 @@ fn run(config: Config) -> Result<(), Error> {
         } else {
             tracing::error!("Thread panicked with error: {:?}", err);
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Thread panic",
-        ))?
+        Err(std::io::Error::other("Thread panic"))?
     };
 
     if let Err(err) = smtp_thread.join() {
@@ -152,11 +149,8 @@ fn run(config: Config) -> Result<(), Error> {
         } else {
             tracing::error!("Thread panicked with error: {:?}", err);
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Thread panic",
-        ))?
+        Err(std::io::Error::other("Thread panic"))?
     };
 
-    Ok(result?)
+    result
 }

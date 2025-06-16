@@ -9,7 +9,6 @@ use crate::tui::focus::FocusStyle;
 pub struct BodyWidget<'w> {
     textarea: TextArea<'w>,
 }
-
 impl<'w> BodyWidget<'w> {
     pub fn new() -> Self {
         Self {
