@@ -1,25 +1,19 @@
 use std::sync::mpsc::{Receiver, Sender};
 
 use lettre::{
-    address::AddressError,
     message::{header::ContentType, Mailbox},
     transport::smtp::{
         authentication::{Credentials, Mechanism},
         response::{Category, Code, Detail, Severity},
-        SmtpTransportBuilder,
     },
     Address, Message, SmtpTransport, Transport,
 };
 use oauth2::{
-    basic::BasicRequestTokenError,
-    reqwest::{self, Error},
-    HttpClientError, TokenResponse,
+    reqwest::{self},
+    TokenResponse,
 };
 
-use crate::smtp::{
-    self,
-    config::{Auth, SmtpConfig},
-};
+use crate::smtp::config::{Auth, SmtpConfig};
 
 pub mod config;
 

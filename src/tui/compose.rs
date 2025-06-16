@@ -1,15 +1,9 @@
-use std::{ops::Add, str::FromStr};
+use std::str::FromStr;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
-use lettre::{
-    address::AddressError,
-    message::{header::ContentType, Mailbox, MessageBuilder},
-    Address, Message,
-};
-use mail_parser::{core::address, parsers::fields::address::AddressParser, Addr};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use lettre::{address::AddressError, Address};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    text::Line,
     widgets::Widget,
 };
 

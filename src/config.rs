@@ -5,10 +5,7 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::{
-    imap::config::ReadBackend,
-    smtp::{self, config::SendBackend},
-};
+use crate::{imap::config::ReadBackend, smtp::config::SendBackend};
 
 pub fn get_config_path<P>(path: Option<P>) -> Result<PathBuf, crate::Error>
 where

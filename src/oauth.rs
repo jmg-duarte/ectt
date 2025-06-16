@@ -16,7 +16,7 @@ use serde::Deserialize;
 use tokio::{io::AsyncWriteExt, net::TcpListener, sync::mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
-use crate::{cli::Provider, Error};
+use crate::Error;
 
 const GMAIL_CLIENT_ID: &str = env!("GMAIL_CLIENT_ID");
 const GMAIL_CLIENT_SECRET: &str = env!("GMAIL_CLIENT_SECRET");
@@ -30,6 +30,20 @@ pub type AppClient = BasicClient<
     EndpointNotSet,
     EndpointSet, // Token URL
 >;
+
+#[derive(Debug, Clone, Default, clap::ValueEnum)]
+pub enum Provider {
+    #[default]
+    Gmail,
+}
+
+impl std::fmt::Display for Provider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Provider::Gmail => write!(f, "gmail"),
+        }
+    }
+}
 
 impl From<Provider> for (AppClient, Vec<Scope>) {
     fn from(value: Provider) -> Self {
@@ -180,6 +194,9 @@ async fn setup_redirect_server(state: RedirectServerState) -> Result<(), std::io
 struct AuthorizationPayload {
     state: CsrfToken,
     code: AuthorizationCode,
+
+    // Still comes in the payload
+    #[allow(unused)]
     scope: Scope,
 }
 

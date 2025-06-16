@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-pub mod configure;
-
 #[derive(Debug, Clone, clap::Parser)]
 pub struct App {
     #[command(subcommand)]
@@ -10,27 +8,17 @@ pub struct App {
 
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum Command {
+    /// Utility to refresh OAuth tokens (only Gmail is currently supported).
     #[cfg(feature = "refresher")]
     Login {
-        #[arg(default_value_t = Provider::Gmail)]
-        provider: Provider,
+        #[arg(default_value_t = crate::oauth::Provider::Gmail)]
+        provider: crate::oauth::Provider,
     },
 
+    /// Run the eCTT TUI.
     Run {
+        /// Path to the configuration file (only JSON is supported).
+        #[arg(long)]
         config: Option<PathBuf>,
     },
-}
-
-#[derive(Debug, Clone, Default, clap::ValueEnum)]
-pub enum Provider {
-    #[default]
-    Gmail,
-}
-
-impl std::fmt::Display for Provider {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Provider::Gmail => write!(f, "gmail"),
-        }
-    }
 }
