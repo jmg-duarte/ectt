@@ -116,22 +116,18 @@ pub struct Client {
 
 impl Client {
     pub fn new(config: SmtpConfig) -> Result<Self, crate::Error> {
-        let (mechanisms, credentials) = match &config.auth {
-            config::Auth::Password(password_config) => (
-                vec![Mechanism::Xoauth2],
-                Credentials::new(config.login.clone(), password_config.raw.clone()),
-            ),
-            config::Auth::OAuth(oauth_config) => (
-                vec![Mechanism::Plain],
-                Credentials::new(
-                    config.login.clone(),
-                    oauth_config.access_token.secret().clone(),
-                ),
+        let credentials = match &config.auth {
+            config::Auth::Password(password_config) => {
+                Credentials::new(config.login.clone(), password_config.raw.clone())
+            }
+            config::Auth::OAuth(oauth_config) => Credentials::new(
+                config.login.clone(),
+                oauth_config.access_token.secret().clone(),
             ),
         };
 
         let transport = SmtpTransport::relay(&config.host)?
-            .authentication(mechanisms)
+            .authentication(vec![Mechanism::Plain])
             .credentials(credentials)
             .build();
 
