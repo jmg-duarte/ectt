@@ -62,7 +62,7 @@ impl UnauthenticatedState {
                     .client
                     .login(self.config.login.as_str(), &password_config.raw)
                 {
-                    Ok(session) => Ok(AuthenticatedState { session }),
+                    Ok(session) => Ok(AuthenticatedState::new(session)),
                     Err((err, client)) => Err((
                         err,
                         Self {
@@ -75,7 +75,7 @@ impl UnauthenticatedState {
             Auth::OAuth(oauth_config) => {
                 let authenticator = OAuthConfigWithUser::new(&self.config.login, oauth_config);
                 match self.client.authenticate("XOAUTH2", &authenticator) {
-                    Ok(session) => Ok(AuthenticatedState { session }),
+                    Ok(session) => Ok(AuthenticatedState::new(session)),
                     Err((err, client)) => Err((
                         err,
                         Self {
@@ -118,9 +118,32 @@ impl UnauthenticatedState {
 
 pub struct AuthenticatedState {
     session: imap::Session<Connection>,
+    uids: Vec<u32>,
 }
 
 impl AuthenticatedState {
+    fn new(session: imap::Session<Connection>) -> Self {
+        Self {
+            session,
+            uids: vec![],
+        }
+    }
+
+    fn prepare_uids(&mut self) -> Result<(), crate::Error> {
+        self.session.select("INBOX")?;
+
+        // This is really slow but at least we're caching them
+        self.uids = self
+            .session
+            .uid_search("ALL")?
+            .into_iter()
+            .sorted()
+            .collect::<Vec<_>>();
+
+        Ok(())
+    }
+
+    // This could be made faster, or at least more interactive if we sent the emails one bby one to the main thread for display
     pub fn read_inbox(
         &mut self,
         count: u32,
@@ -128,15 +151,20 @@ impl AuthenticatedState {
     ) -> Result<Vec<ParsedEmail>, crate::Error> {
         self.session.select("INBOX")?;
 
-        let uids = self.session.uid_search("ALL")?;
-        let max_uid = uids.iter().max().copied().unwrap_or(1);
-        let top = max_uid.saturating_sub(offset).max(1);
-        let bot = max_uid.saturating_sub(offset + count).max(1);
+        if self.uids.is_empty() {
+            self.prepare_uids()?;
+        }
+        if self.uids.is_empty() {
+            return Ok(vec![]);
+        }
 
-        let messages = self.session.uid_fetch(
-            format!("{bot}:{top}"),
-            "(UID INTERNALDATE RFC822 RFC822.TEXT)",
-        )?;
+        let last_idx = self.uids.len() - 1; // Worst case this is 0 and it always exists
+        let top = self.uids[last_idx.saturating_sub(offset as usize)];
+        let bot = self.uids[last_idx.saturating_sub((offset + count - 1) as usize)]; // -1 because IMAP range is inclusive
+
+        let messages = self
+            .session
+            .uid_fetch(format!("{bot}:{top}"), "(UID INTERNALDATE RFC822)")?;
 
         let mut parsed_emails = Vec::with_capacity(messages.len());
         let parser = MessageParser::new();

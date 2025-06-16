@@ -23,6 +23,8 @@ use crate::tui::popup::Popup;
 use crate::tui::reading::ReadingWidget;
 use crate::{smtp, Error};
 
+const EMAILS_TO_LOAD: u32 = 20;
+
 enum Screen<'w> {
     Inbox(InboxWidget<'w>),
     Compose(ComposeWidget<'w>),
@@ -76,7 +78,7 @@ impl ScreenState {
 impl ScreenState {
     fn load(&mut self) -> Result<(), SendError<Command>> {
         self.to_imap.send(Command::ReadInbox {
-            count: 5,
+            count: EMAILS_TO_LOAD,
             offset: 0,
         })?;
         self.request_inflight = true;
@@ -200,7 +202,7 @@ pub fn run(
                             code: KeyCode::Down,
                             ..
                         }) => {
-                            if let Err(err) = state.load_more(5) {
+                            if let Err(err) = state.load_more(EMAILS_TO_LOAD) {
                                 tracing::error!("Failed to send message to IMAP thread: {err}");
                                 if cfg!(debug_assertions) {
                                     panic!("Channel was closed with pending messages");
