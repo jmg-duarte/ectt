@@ -1,3 +1,4 @@
+#![cfg(feature = "refresher")]
 use std::env;
 
 use axum::{

@@ -10,6 +10,7 @@ pub struct App {
 
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum Command {
+    #[cfg(feature = "refresher")]
     Login {
         #[arg(default_value_t = Provider::Gmail)]
         provider: Provider,

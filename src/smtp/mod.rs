@@ -16,12 +16,9 @@ use oauth2::{
     HttpClientError, TokenResponse,
 };
 
-use crate::{
-    oauth,
-    smtp::{
-        self,
-        config::{Auth, SmtpConfig},
-    },
+use crate::smtp::{
+    self,
+    config::{Auth, SmtpConfig},
 };
 
 pub mod config;

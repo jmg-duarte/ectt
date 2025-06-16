@@ -1,7 +1,9 @@
+#[cfg(feature = "refresher")]
+mod oauth;
+
 mod cli;
 mod config;
 mod imap;
-mod oauth;
 mod smtp;
 mod tui;
 
@@ -13,11 +15,11 @@ use oauth2::{reqwest, HttpClientError};
 use tracing::Level;
 use tracing_appender::non_blocking::WorkerGuard;
 
+use crate::cli::App;
 use crate::config::{get_config_path, Config};
 use crate::imap::config::ReadBackend;
 use crate::imap::imap_thread;
 use crate::smtp::config::SendBackend;
-use crate::{cli::App, oauth::execute_authentication_flow};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -69,13 +71,14 @@ fn main() -> Result<(), Error> {
     let app = App::parse();
 
     match app.command {
+        #[cfg(feature = "refresher")]
         cli::Command::Login { provider } => {
             let (client, scopes) = provider.into();
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .expect("failed to build the runtime")
-                .block_on(execute_authentication_flow(client, scopes))
+                .block_on(crate::oauth::execute_authentication_flow(client, scopes))
         }
         cli::Command::Run { config } => {
             let config_path = get_config_path(config).inspect_err(|err| {
