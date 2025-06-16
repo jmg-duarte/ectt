@@ -14,10 +14,13 @@ cargo b -r
 
 ```
 cargo r -r -- run
-# or
-ectt run
 ```
 
+You can download the binary from the [GitHub Releases](https://github.com/jmg-duarte/ectt/releases) and run it with:
+
+```
+ectt run
+```
 
 ## Configuration
 
@@ -274,7 +277,3 @@ After setting both IMAP and SMTP, your file should look like this:
 }
 
 ```
-
-#### Known Bugs
-
-* When loading messages from the provider, if the message has no subject and no body, no more messages after it will load.
